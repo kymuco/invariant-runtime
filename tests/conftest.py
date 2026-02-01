@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 from __future__ import annotations
 
 import sys
@@ -14,15 +15,15 @@ for p in (ROOT, SRC):
         sys.path.insert(0, str(p))
 
 
+import socket
 import threading
 import time
-import socket
+
 import pytest
 
 from invariant.ops.host import RuntimeHost
-from invariant.ops.tracing import InMemoryRuntimeTracer
 from invariant.ops.metrics import RuntimeMetrics
-
+from invariant.ops.tracing import InMemoryRuntimeTracer
 from tests.fake_service import FakePluginService
 
 

@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import inspect
-from typing import Dict
 import logging
 
-from invariant.spec.plugin import BasePlugin
-from invariant.exec.runtime.plugin_context import DefaultPluginContext
-from invariant.spec.descriptor import PluginDescriptor
-from invariant.load.loader import PluginLoader
 from invariant.exec.runtime.lifecycle import PluginFSM, PluginState
+from invariant.exec.runtime.plugin_context import DefaultPluginContext
+from invariant.load.loader import PluginLoader
+from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
+from invariant.spec.plugin import BasePlugin
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class PluginKernel:
         self,
         *,
         plugin: BasePlugin,
-        dependencies: Dict[str, object],
+        dependencies: dict[str, object],
     ) -> None:
         """
         Initialize plugin with resolved dependencies.
@@ -147,7 +146,7 @@ class PluginKernel:
     def _call_initialize(
         self,
         plugin: BasePlugin,
-        deps: Dict[str, object],
+        deps: dict[str, object],
     ) -> None:
         """
         Call initialize() with safe signature binding.

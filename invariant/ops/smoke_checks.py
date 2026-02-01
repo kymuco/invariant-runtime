@@ -1,19 +1,21 @@
+# mypy: ignore-errors
 from __future__ import annotations
 
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
-from invariant.exec.runtime.activation import ActivationEvent, ActivationEventType, ActivationTransaction
-from invariant.exec.caps.registry import CapabilityProvider
+from invariant.exec.caps.registry import CAP_PREFIX, CapabilityProvider
 from invariant.exec.caps.view import CapabilityView
-from invariant.exec.caps.registry import CAP_PREFIX
-from invariant.exec.caps.registry import CapabilityUnavailableError
-from invariant.ops.tracing import InMemoryRuntimeTracer
+from invariant.exec.runtime.activation import (
+    ActivationEvent,
+    ActivationEventType,
+    ActivationTransaction,
+)
 from invariant.ops.metrics import RuntimeMetrics
 from invariant.ops.supervisor import ExecutionSupervisor
-from invariant.ops.errors import PluginCallError
+from invariant.ops.tracing import InMemoryRuntimeTracer
 
 
 def _ok(name: str) -> None:

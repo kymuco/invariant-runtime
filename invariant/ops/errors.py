@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
 class ErrorPayload:
     code: str
     message: str
-    detail: Optional[str] = None
-    extra: Optional[Dict[str, Any]] = None
+    detail: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 class RuntimeErrorBase(Exception):
@@ -21,7 +21,7 @@ class RuntimeErrorBase(Exception):
     """
     code: str = "runtime_error"
 
-    def __init__(self, message: str, *, detail: str | None = None, extra: Dict[str, Any] | None = None):
+    def __init__(self, message: str, *, detail: str | None = None, extra: dict[str, Any] | None = None):
         super().__init__(str(message))
         self.detail = detail
         self.extra = extra or None

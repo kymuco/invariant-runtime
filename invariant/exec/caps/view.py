@@ -1,6 +1,8 @@
 # invariant/exec/caps/view.py
 from __future__ import annotations
-from invariant.exec.caps.registry import split_id_version, CapabilityUnavailableError
+
+from invariant.exec.caps.registry import CapabilityUnavailableError, split_id_version
+
 
 class CapabilityView:
     def __init__(

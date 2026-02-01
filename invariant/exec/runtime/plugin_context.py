@@ -1,9 +1,10 @@
 # invariant/exec/runtime/plugin_context.py
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Mapping, Optional
+from typing import Any
 
-from invariant.spec.context import PluginContext, EmitEvent
+from invariant.spec.context import EmitEvent, PluginContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,7 +14,7 @@ class DefaultPluginContext(PluginContext):
     """
     runtime_id: str
     config: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
-    emit_event: Optional[EmitEvent] = None
+    emit_event: EmitEvent | None = None
 
     # можно добавить мягкие, безопасные вещи:
     # clock / metrics / resource handles (потом)

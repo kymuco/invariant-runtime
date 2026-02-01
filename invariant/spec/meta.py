@@ -1,12 +1,15 @@
 # invariant/spec/meta.py
 from __future__ import annotations
 
-from typing import Mapping, Any
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from packaging.version import Version, InvalidVersion
+from typing import Any
 
-from invariant.spec.dependency import DependencySpec, DependencyScope
-from invariant.spec.ids import canonical_plugin_id, canonical_id_or_ref, base_id
+from packaging.version import InvalidVersion, Version
+
+from invariant.spec.dependency import DependencyScope, DependencySpec
+from invariant.spec.ids import base_id, canonical_id_or_ref, canonical_plugin_id
+
 # or replace to `canonical_plugin_id`
 
 _ALLOWED_MATURITY = {"experimental", "beta", "stable", "deprecated"}
@@ -155,7 +158,7 @@ class PluginMeta:
         except InvalidVersion:
             return None
 
-    def is_newer_than(self, other: "PluginMeta") -> bool:
+    def is_newer_than(self, other: PluginMeta) -> bool:
         self_v = self.version_tuple()
         other_v = other.version_tuple()
         if self_v and other_v:

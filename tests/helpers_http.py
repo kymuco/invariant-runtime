@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import http.client
 import json
-from dataclasses import dataclass
 import socket
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class HttpResp:
     status: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
     body: bytes
 
     def json(self) -> Any:
@@ -22,16 +22,16 @@ def http_json(
     port: int,
     method: str,
     path: str,
-    body_obj: Optional[dict] = None,
+    body_obj: dict | None = None,
     *,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     expect_continue: bool = False,
     timeout: float = 3.0,
 ) -> HttpResp:
     conn = http.client.HTTPConnection(host, port, timeout=timeout)
 
     raw = b""
-    h: Dict[str, str] = {}
+    h: dict[str, str] = {}
     if headers:
         h.update(headers)
 
@@ -74,7 +74,7 @@ def _read_http_response(sock: socket.socket, *, timeout: float = 3.0) -> HttpRes
     except Exception:
         status = 0
 
-    headers: Dict[str, str] = {}
+    headers: dict[str, str] = {}
     for ln in lines[1:]:
         if b":" in ln:
             k, v = ln.split(b":", 1)
@@ -110,7 +110,7 @@ def http_json_expect_continue_raw(
     path: str,
     body_obj: dict,
     *,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     timeout: float = 3.0,
 ) -> HttpResp:
     """

@@ -2,14 +2,21 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Callable
+from typing import TYPE_CHECKING, Any
 
+from invariant.exec.caps.registry import (
+    CapabilityNotFound,
+    CapabilityUnavailableError,
+    CapabilityVersionMismatch,
+    is_capability_ref,
+)
 from invariant.spec.plugin import BasePlugin
-from invariant.exec.caps.registry import CapabilityNotFound, CapabilityVersionMismatch, is_capability_ref
-from invariant.exec.caps.registry import CapabilityUnavailableError
 
+if TYPE_CHECKING:
+    from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 
 class ActivationEventType(Enum):
     START = auto()
@@ -56,17 +63,17 @@ class ActivationTransaction:
     - "created" plugins that never reached READY are simply discarded.
     """
 
-    runtime: "ExecutionRuntime"  # forward  # type: ignore
+    runtime: ExecutionRuntime
     root_id: str
     tx_id: str
 
-    staged: Dict[str, BasePlugin] = field(default_factory=dict)
-    ready_order: List[str] = field(default_factory=list)
+    staged: dict[str, BasePlugin] = field(default_factory=dict)
+    ready_order: list[str] = field(default_factory=list)
     ready_set: set[str] = field(default_factory=set)
-    created_order: List[str] = field(default_factory=list)  # stage order (for rollback)
+    created_order: list[str] = field(default_factory=list)  # stage order (for rollback)
 
     # Delegates "external dependencies" (other policies/runtimes) back to context getter
-    base_dependency_getter: Optional[Callable[[Any], object]] = None
+    base_dependency_getter: Callable[[Any], object] | None = None
 
     def _emit(self, event: ActivationEventType, *, plugin_id: str | None = None, detail: str | None = None) -> None:
         tracer = getattr(self.runtime, "tracer", None)
@@ -95,10 +102,10 @@ class ActivationTransaction:
     def end(self) -> None:
         self._emit(ActivationEventType.END)
 
-    def get_staged(self, plugin_key: str) -> Optional[BasePlugin]:
+    def get_staged(self, plugin_key: str) -> BasePlugin | None:
         return self.staged.get(plugin_key)
 
-    def dependency_get(self, spec) -> Optional[Any]:
+    def dependency_get(self, spec) -> Any | None:
         dep_ref = getattr(spec, "id", None)
         if not dep_ref:
             raise TypeError("Dependency getter expects DependencySpec with .id")

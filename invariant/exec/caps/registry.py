@@ -1,26 +1,14 @@
 # invariant/exec/caps/registry.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict
 import threading
+from dataclasses import dataclass
+from typing import Any
 
-from invariant.spec.versioning import canon_version_key
 from invariant.exec.caps.catalog import CATALOG, OFFICIAL_CAPS
-from invariant.exec.caps.ids import cap_base_id, CAP_PREFIX
-
-
-def split_id_version(raw: str) -> tuple[str, str | None]:
-    """
-    'x:y@1.2.3' -> ('x:y', '1.2.3')
-    'x:y' -> ('x:y', None)
-    """
-    if "@" not in raw:
-        return raw, None
-    base, ver = raw.rsplit("@", 1)
-    base = base.strip()
-    ver = ver.strip() or None
-    return base, ver
+from invariant.exec.caps.ids import CAP_PREFIX, cap_base_id
+from invariant.spec.ids import split_id_version
+from invariant.spec.versioning import canon_version_key
 
 
 def is_capability_ref(dep_id: str) -> bool:
@@ -72,7 +60,7 @@ class CapabilityProvider:
     def __init__(self, *, strict_versions: bool = True, strict_catalog: bool = True):
         self._strict_versions = bool(strict_versions)
         self._strict_catalog = bool(strict_catalog)
-        self._caps: Dict[str, CapabilityEntry] = {}
+        self._caps: dict[str, CapabilityEntry] = {}
         self._lock = threading.RLock()
         self._frozen = False
 

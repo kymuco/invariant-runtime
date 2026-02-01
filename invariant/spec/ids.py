@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from packaging.version import Version, InvalidVersion
+
+from packaging.version import InvalidVersion, Version
 
 _ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._:-]*[a-z0-9])?$", re.IGNORECASE)
 
@@ -24,12 +25,15 @@ def canonical_plugin_id(value: str) -> str:
     return cid
 
 def split_id_version(raw: str) -> tuple[str, str | None]:
+    """
+    'x:y@1.2.3' -> ('x:y', '1.2.3')
+    'x:y' -> ('x:y', None)
+    """
     if "@" not in raw:
         return raw, None
     base, ver = raw.rsplit("@", 1)
-    base = base.strip()
-    ver = ver.strip() or None
-    return base, ver
+    ver_opt: str | None = ver.strip() or None
+    return base.strip(), ver_opt
 
 def canonical_id_or_ref(raw: str) -> str:
     if not isinstance(raw, str) or not raw.strip():

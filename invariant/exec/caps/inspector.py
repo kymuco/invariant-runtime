@@ -1,7 +1,7 @@
 # invariant/exec/caps/inspector.py
 from __future__ import annotations
 
-from invariant.exec.caps.ids import CAP_FS_SANDBOX, CAP_WORKSPACE, CAP_PREFIX
+from invariant.exec.caps.ids import CAP_FS_SANDBOX, CAP_PREFIX, CAP_WORKSPACE
 
 
 class RuntimeInspector:

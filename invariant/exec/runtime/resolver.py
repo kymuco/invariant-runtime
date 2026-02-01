@@ -1,13 +1,13 @@
 # invariant/exec/resolver.py
 from __future__ import annotations
 
-from typing import Dict, Set, List, Callable, Optional, Any
+from collections.abc import Callable
+from typing import Any
 
-from invariant.spec.ids import base_id
-from invariant.spec.errors import DependencyCycleError, PluginNotFoundError
-from invariant.spec.descriptor import PluginDescriptor
 from invariant.exec.caps.registry import is_capability_ref
-
+from invariant.spec.descriptor import PluginDescriptor
+from invariant.spec.errors import DependencyCycleError, PluginNotFoundError
+from invariant.spec.ids import base_id
 
 EdgeFilter = Callable[[str, Any], bool]
 
@@ -26,13 +26,13 @@ class DependencyResolver:
       Use it to inline only dependencies that belong to the current policy/runtime.
     """
 
-    def __init__(self, *, registry, edge_filter: Optional[EdgeFilter] = None) -> None:
+    def __init__(self, *, registry, edge_filter: EdgeFilter | None = None) -> None:
         self._registry = registry
         self._edge_filter = edge_filter
-        self._graph: Dict[str, Set[str]] = {}
-        self._caps: Dict[str, Set[str]] = {}
-        self._visited: Set[str] = set()
-        self._stack: Set[str] = set()
+        self._graph: dict[str, set[str]] = {}
+        self._caps: dict[str, set[str]] = {}
+        self._visited: set[str] = set()
+        self._stack: set[str] = set()
 
     # ---------- public API ----------
 
@@ -55,8 +55,8 @@ class DependencyResolver:
         """
         Topological sort: dependencies first.
         """
-        visited: Set[str] = set()
-        order: List[str] = []
+        visited: set[str] = set()
+        order: list[str] = []
 
         def visit(node: str):
             if node in visited:
@@ -94,12 +94,10 @@ class DependencyResolver:
 
         try:
             # descriptor: PluginDescriptor = self._registry.resolve(plugin_id)
-            specs = d.meta.dependencies or []
-
             self._graph.setdefault(plugin_id, set())
             self._caps.setdefault(plugin_id, set())
 
-            for spec in specs:
+            for spec in d.meta.dependencies:
                 dep_id = spec.id
 
                 # Capabilities are not plugins: skip graph edges entirely
@@ -110,7 +108,7 @@ class DependencyResolver:
                 # Resolve dependency to canonical id (pins version / normalizes latest)
                 try:
                     dep_canon = self._canonical(dep_id)
-                except (PluginNotFoundError, ValueError) as e:
+                except (PluginNotFoundError, ValueError):
                     if spec.optional:
                         continue
                     raise

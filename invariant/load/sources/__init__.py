@@ -1,9 +1,9 @@
 from .base import PluginSource
+from .entrypoint import EntrypointSource
 from .filesystem import FilesystemSource
 from .manifest import ManifestSource
-from .entrypoint import EntrypointSource
-from .zip import ZipSource
 from .remote import RemoteSource
+from .zip import ZipSource
 
 __all__ = [
     "PluginSource",

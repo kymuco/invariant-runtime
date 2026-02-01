@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 
 class EnvDictConfigSource:
@@ -14,7 +15,7 @@ class EnvDictConfigSource:
     """
     def __init__(
         self,
-        data: Dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         *,
         allow_env: bool = False,
         env_prefix: str = "INVARIANT_",

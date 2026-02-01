@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Type, Any
+from typing import Any
 
 from invariant.load.sources.base import PluginSource
 from invariant.spec.descriptor import PluginDescriptor
-from invariant.spec.source import PluginSourceSpec
-from invariant.spec.plugin import BasePlugin
 from invariant.spec.errors import PluginLoadError
+from invariant.spec.plugin import BasePlugin
+from invariant.spec.source import PluginSourceSpec
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +28,18 @@ class ZipSource(PluginSource):
 
     kind = "zip"
 
-    def __init__(self, search_paths: Optional[list[str]] = None):
+    def __init__(self, search_paths: list[str] | None = None):
         self.search_paths = list(search_paths or [])
 
     def discover(
         self,
-        base_class: Optional[Type] = None,
+        base_class: type | None = None,
         include_unstable: bool = False,
         *,
         dev_mode: bool = False,
         fail_fast: bool = False,
         **kwargs: Any,
-    ) -> List[PluginDescriptor]:
+    ) -> list[PluginDescriptor]:
         logger.debug("[ZipSource] discover() stub")
         return []
 

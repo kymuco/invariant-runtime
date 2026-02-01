@@ -1,10 +1,10 @@
 # invariant/exec/caps/audit.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Optional, Dict, Iterator
 import time
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, Literal, Self
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,13 +63,13 @@ def _sanitize(obj: Any, *, max_str: int = 1024, max_items: int = 50, _depth: int
 
 @dataclass(slots=True)
 class _CapAuditSpan:
-    audit: "CapabilityAudit"
+    audit: CapabilityAudit
     name: str
     cap_id: str
     payload: dict[str, Any]
     _t0: float = 0.0
 
-    def __enter__(self) -> "_CapAuditSpan":
+    def __enter__(self) -> Self:
         self._t0 = time.perf_counter()
         return self
 
@@ -83,7 +83,7 @@ class _CapAuditSpan:
         except Exception:
             return
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
         dt_ms = (time.perf_counter() - self._t0) * 1000.0
         self.audit._emit_event(
             self.name,
@@ -99,7 +99,7 @@ class _CapAuditSpan:
 class CapabilityAudit:
     """Capability-level auditing sink. Containment-only (never raises)."""
 
-    def __init__(self, emit: Optional[Callable[..., None]] = None) -> None:
+    def __init__(self, emit: Callable[..., None] | None = None) -> None:
         self._emit = emit
 
     def span(

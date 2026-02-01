@@ -1,28 +1,28 @@
 # invariant/exec/runtime/execution_runtime.py
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Dict, List, Any, Mapping, Optional
 import logging
 import uuid
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any
 
-from invariant.spec.plugin import BasePlugin
-from invariant.spec.dependency import DependencySpec
-from invariant.exec.runtime.activation import ActivationTransaction
-from invariant.exec.runtime.plugin_context import DefaultPluginContext
-from invariant.exec.runtime.kernel import PluginKernel
+from invariant.exec.caps.audit import CapabilityAudit
+from invariant.exec.caps.policy import CapabilityPolicy, CapabilityPolicyContext
 from invariant.exec.caps.registry import (
     CapabilityNotFound,
     CapabilityProvider,
     CapabilityUnavailableError,
     CapabilityVersionMismatch,
-    is_capability_ref
+    is_capability_ref,
 )
 from invariant.exec.caps.view import CapabilityView
-from invariant.exec.caps.audit import CapabilityAudit
-from invariant.exec.caps.policy import CapabilityPolicy, CapabilityPolicyContext
+from invariant.exec.runtime.activation import ActivationTransaction
+from invariant.exec.runtime.kernel import PluginKernel
+from invariant.exec.runtime.plugin_context import DefaultPluginContext
+from invariant.spec.dependency import DependencySpec
 from invariant.spec.modes import InstanceMode
-
+from invariant.spec.plugin import BasePlugin
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ExecutionRuntime:
         # ---- 1) identity/state ----
         self.runtime_id = str(uuid.uuid4())
         self._closed = False
-        self._initialization_order: List[str] = []
+        self._initialization_order: list[str] = []
 
         # ---- 2) basic wiring ----
         self.registry = registry
@@ -91,7 +91,7 @@ class ExecutionRuntime:
         )
 
         self._cap_audit = CapabilityAudit(emit=self.context.emit_event)
-        self._cap_bind_cache: Dict[str, object] = {}
+        self._cap_bind_cache: dict[str, object] = {}
 
         self.capabilities = CapabilityView(
             base_caps,
@@ -107,7 +107,7 @@ class ExecutionRuntime:
     def _emit_runtime_event(
         self,
         name: str,
-        payload: Optional[Mapping[str, Any]] = None,
+        payload: Mapping[str, Any] | None = None,
         **fields: Any,
     ) -> None:
         """
@@ -131,7 +131,7 @@ class ExecutionRuntime:
         if cb is None:
             return
         try:
-            data: Dict[str, Any] = {}
+            data: dict[str, Any] = {}
 
             # Start with payload (old style)
             if payload:
@@ -236,11 +236,7 @@ class ExecutionRuntime:
 
             tx.commit()
 
-        except Exception as e:
-            # try:
-            #     tx._emit(ActivationEventType.ROLLBACK, detail=f"error={type(e).__name__}: {e}")
-            # except Exception:
-            #     pass
+        except Exception:
             tx.rollback()
             raise
 
@@ -307,7 +303,7 @@ class ExecutionRuntime:
         dependency_getter=None,
     ) -> None:
         descriptor = self.registry.resolve(plugin_id)
-        dep_instances: Dict[str, object] = {}
+        dep_instances: dict[str, object] = {}
 
         getter = dependency_getter or self._dependency_getter
 

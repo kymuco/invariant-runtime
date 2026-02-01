@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import PurePosixPath
-from typing import Any, Dict, Iterator, Mapping, Optional
+from typing import Any, Literal, Self
 
 from invariant.exec.caps.audit import CapabilityAudit
 from invariant.exec.caps.fs import FSAccess
@@ -33,13 +34,13 @@ def _validate_rel_path(rel_path: str) -> str:
 
 class _NoopSpan:
     """No-audit span with the same interface as _CapAuditSpan."""
-    def __enter__(self) -> "_NoopSpan":
+    def __enter__(self) -> Self:
         return self
 
     def add(self, **fields: Any) -> None:
         return
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
         return False
 
 
@@ -73,16 +74,17 @@ class KVStore:
             raise ValueError("max_bytes must be > 0")
         self._max_bytes = mb
 
-        self._audit: Optional[CapabilityAudit] = None
-        self._cap_id: Optional[str] = None
+        self._audit: CapabilityAudit | None = None
+        self._cap_id: str | None = None
 
-    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> "KVStore":
+    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> Self:
         if not isinstance(audit, CapabilityAudit):
             raise TypeError("audit must be CapabilityAudit")
         if not isinstance(cap_id, str) or not cap_id.strip():
             raise ValueError("cap_id must be non-empty string")
 
-        v = KVStore(
+        cls = type(self)
+        v = cls(
             fs=self._fs,
             rel_path=self._rel_path,
             repair_on_write=self._repair_on_write,
@@ -168,7 +170,7 @@ class KVStore:
             return _NoopSpan()
         return self._audit.span(f"cap.kv.{op}", cap_id=self._cap_id, payload=payload)
 
-    def _load(self) -> Dict[str, Any]:
+    def _load(self) -> dict[str, Any]:
         with self._span("load", payload={"path": self._rel_path}) as sp:
             p = self._fs.resolve(self._rel_path)
             if not p.exists():
@@ -199,7 +201,7 @@ class KVStore:
             sp.add(count=len(obj))
             return obj
 
-    def _save(self, data: Dict[str, Any]) -> None:
+    def _save(self, data: dict[str, Any]) -> None:
         with self._span("save", payload={"path": self._rel_path, "count": len(data)}) as sp:
             text = json.dumps(
                 data,

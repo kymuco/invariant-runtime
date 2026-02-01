@@ -1,22 +1,21 @@
 # invariant/exec/runtime/execution_context.py
 from __future__ import annotations
 
-import uuid
-from typing import Dict, Tuple, Any, List
-from pathlib import Path
 import json
 import logging
+import uuid
+from pathlib import Path
+from typing import Any
 
+from invariant.api.policies import EphemeralPolicy, ManagedPolicy
+from invariant.api.types import WorkspaceOptions
+from invariant.exec.caps.fs import FSAccess
+from invariant.exec.caps.registry import CapabilityProvider, is_capability_ref, split_id_version
 from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 from invariant.exec.runtime.resolver import DependencyResolver
-from invariant.exec.caps.registry import CapabilityProvider, is_capability_ref, split_id_version
-from invariant.exec.caps.fs import FSAccess
 from invariant.ops.fs import rmtree_best_effort
 from invariant.spec.dependency import DependencyScope
 from invariant.spec.errors import DependencyCycleError
-from invariant.api.policies import ManagedPolicy, EphemeralPolicy
-from invariant.api.types import WorkspaceOptions
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class ExecutionContext:
         *,
         plugin_service,
         policy,
-        dependency_overrides: Dict[str, object] | None = None,
+        dependency_overrides: dict[str, object] | None = None,
         workspace_id: str | None = None,
         workspace_options=None,
         cleanup_sandbox: bool = True,
@@ -45,10 +44,10 @@ class ExecutionContext:
         self._dependency_overrides = dependency_overrides or {}
 
         # runtime per policy (lazy)
-        self._runtimes: Dict[Tuple[Any, ...], ExecutionRuntime] = {}
+        self._runtimes: dict[tuple[Any, ...], ExecutionRuntime] = {}
 
         # cross-runtime cycle guard
-        self._activation_stack: List[Tuple[Tuple[Any, ...], str]] = []
+        self._activation_stack: list[tuple[tuple[Any, ...], str]] = []
 
         # reuse policies (do NOT create new instances per dependency)
         self._managed_policy = ManagedPolicy()
@@ -58,16 +57,16 @@ class ExecutionContext:
         self._capabilities_base = CapabilityProvider(strict_versions=True)
         # Public view is assigned later after root runtime is created:
         #   self.capabilities = self._root_runtime.capabilities
-        self.capabilities = None  # type: ignore[assignment]
+        # self.capabilities = None
 
         from invariant.exec.caps.config_source import EnvDictConfigSource
         from invariant.exec.caps.ids import (
-            CAP_FS_SANDBOX,
-            CAP_WORKSPACE,
             CAP_CONFIG_SOURCE,
-            CAP_KV,
+            CAP_FS_SANDBOX,
             CAP_HTTP,
             CAP_INSPECTOR,
+            CAP_KV,
+            CAP_WORKSPACE,
         )
 
         sandbox_root = Path.cwd() / ".invariant" / "sandbox" / self.id
@@ -208,13 +207,12 @@ class ExecutionContext:
         for runtime in self._runtimes.values():
             runtime.shutdown()
 
-        if getattr(self, "_cleanup_sandbox", False):
+        if self._cleanup_sandbox:
             try:
-                rmtree_best_effort(getattr(self, "_sandbox_root"))
+                rmtree_best_effort(self._sandbox_root)
             except Exception:
-                logger.exception(
-                    "Failed to cleanup sandbox %s", getattr(self, "_sandbox_root", None)
-                )
+                logger.exception("Failed to cleanup sandbox %s", self._sandbox_root)
+
 
         self._closed = True
 
@@ -231,7 +229,7 @@ class ExecutionContext:
         policy = self._dependency_overrides.get(plugin_id) or self._dependency_overrides.get(base_id) or self._root_policy
         return self._get_runtime(policy)
 
-    def _policy_key(self, policy) -> Tuple[Any, ...]:
+    def _policy_key(self, policy) -> tuple[Any, ...]:
         cls = policy.__class__
         mode = getattr(policy, "instance_mode", None)
         limits = getattr(policy, "limits", None)

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import importlib.util
-import sys
+import json
 import logging
+import sys
 from pathlib import Path
-from typing import Any, List, Optional, Type
+from typing import Any, Literal
 
 from invariant.load.sources.base import PluginSource
-from invariant.spec.meta import PluginMeta
 from invariant.spec.descriptor import PluginDescriptor
-from invariant.spec.source import PluginSourceSpec
-from invariant.spec.plugin import BasePlugin
 from invariant.spec.errors import PluginLoadError
+from invariant.spec.meta import PluginMeta
+from invariant.spec.plugin import BasePlugin
+from invariant.spec.source import PluginSourceSpec
 
 # поправь путь импорта под твой проект
 # from invariant.spec.dependency import DependencySpec, DependencyScope  # noqa: F401
@@ -35,9 +35,9 @@ class ManifestSource(PluginSource):
     - module_name вычисляется стабильно из plugin id + version
     """
 
-    kind = "manifest"
+    kind: Literal["manifest"] = "manifest"
 
-    def __init__(self, search_paths: List[Path | str]):
+    def __init__(self, search_paths: list[Path | str]):
         self.search_paths = [Path(p).resolve() for p in search_paths]
 
     # ------------------------------------------------------------------
@@ -46,14 +46,14 @@ class ManifestSource(PluginSource):
 
     def discover(
         self,
-        base_class: Optional[Type] = None,
+        base_class: type[object] | None = None,
         include_unstable: bool = False,
         *,
         dev_mode: bool = False,
         fail_fast: bool = False,
         **kwargs,
-    ) -> List[PluginDescriptor]:
-        descriptors: List[PluginDescriptor] = []
+    ) -> list[PluginDescriptor]:
+        descriptors: list[PluginDescriptor] = []
 
         for base in self.search_paths:
             if not base.exists():
@@ -71,9 +71,19 @@ class ManifestSource(PluginSource):
                     # NOTE: base_class фильтр требует загрузки модуля, иначе не проверить issubclass.
                     # Если хочешь 100% no-reflection на discover — убери этот блок и фильтруй позже.
                     if base_class is not None:
-                        module = self._load_module(descriptor.source.module, descriptor.source.path)
-                        cls = getattr(module, descriptor.source.class_name, None)
-                        if not cls or not issubclass(cls, base_class):
+                        mod = descriptor.source.module
+                        path = descriptor.source.path
+
+                        if mod is None or path is None:
+                            raise ValueError("manifest source requires both 'module' and 'path'")
+
+                        module = self._load_module(mod, path)
+                        name = descriptor.source.class_name
+                        if not name:
+                            raise ValueError("manifest source requires class_name")
+
+                        cls = getattr(module, name, None)
+                        if not isinstance(cls, type) or not issubclass(cls, base_class):
                             logger.info(
                                 "Skipping plugin %s: does not match base_class",
                                 descriptor.meta.id,
@@ -136,7 +146,7 @@ class ManifestSource(PluginSource):
         except PluginLoadError:
             raise
         except Exception as e:
-            raise PluginLoadError(f"Failed to read manifest: {manifest_path}", cause=e)
+            raise PluginLoadError(f"Failed to read manifest: {manifest_path}", cause=e) from e
 
         if not isinstance(data, dict):
             raise PluginLoadError(f"Manifest root must be an object: {manifest_path}")
@@ -168,7 +178,7 @@ class ManifestSource(PluginSource):
         try:
             meta = PluginMeta(**meta_dict)
         except TypeError as e:
-            raise PluginLoadError(f"Invalid PluginMeta in manifest: {manifest_path}", cause=e)
+            raise PluginLoadError(f"Invalid PluginMeta in manifest: {manifest_path}", cause=e) from e
 
         if not meta.id:
             raise PluginLoadError(f"Manifest plugin must define meta.id: {manifest_path}")
@@ -238,9 +248,8 @@ class ManifestSource(PluginSource):
 
         module = self._load_module(source.module, source.path)
 
-        try:
-            cls = getattr(module, source.class_name)
-        except AttributeError:
+        cls = getattr(module, source.class_name, None)
+        if cls is None:
             raise PluginLoadError(
                 f"Plugin class '{source.class_name}' not found in {source.module}"
             )
@@ -263,7 +272,7 @@ class ManifestSource(PluginSource):
             raise PluginLoadError(
                 f"Plugin {source.class_name} constructor failed",
                 cause=e,
-            )
+            ) from None
 
 
     # ------------------------------------------------------------------
@@ -292,11 +301,11 @@ class ManifestSource(PluginSource):
 
         try:
             sys.modules[module_name] = module
-            spec.loader.exec_module(module)  # type: ignore[attr-defined]
+            spec.loader.exec_module(module)
         except Exception as e:
             sys.modules.pop(module_name, None)
             logger.exception("Failed to load module %s from %s: %s", module_name, file, e)
-            raise PluginLoadError(f"Failed to load module {module_name} from {file}", cause=e)
+            raise PluginLoadError(f"Failed to load module {module_name} from {file}", cause=e) from None
 
         return module
 

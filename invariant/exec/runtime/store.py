@@ -1,5 +1,4 @@
 # invariant/exec/store.py
-from typing import Dict, Optional
 
 
 class ManagedInstanceStore:
@@ -12,7 +11,7 @@ class ManagedInstanceStore:
     def __init__(self, *, registry):
         self._registry = registry
 
-    def get(self, key: str) -> Optional[object]:
+    def get(self, key: str) -> object | None:
         return self._registry.get_instance(key)
 
     def set(self, key: str, plugin: object) -> None:
@@ -21,7 +20,7 @@ class ManagedInstanceStore:
     def drop(self, key: str) -> None:
         self._registry.drop_instance(key)
 
-    def all_instances(self) -> Dict[str, object]:
+    def all_instances(self) -> dict[str, object]:
         # registry.instances() now exists
         return dict(self._registry.instances())
 
@@ -42,9 +41,9 @@ class EphemeralInstanceStore:
     """
 
     def __init__(self):
-        self._instances: Dict[str, object] = {}
+        self._instances: dict[str, object] = {}
 
-    def get(self, key: str) -> Optional[object]:
+    def get(self, key: str) -> object | None:
         return self._instances.get(key)
 
     def set(self, key: str, plugin: object) -> None:
@@ -53,7 +52,7 @@ class EphemeralInstanceStore:
     def drop(self, key: str) -> None:
         self._instances.pop(key, None)
 
-    def all_instances(self) -> Dict[str, object]:
+    def all_instances(self) -> dict[str, object]:
         return dict(self._instances)
 
     def clear(self) -> None:

@@ -1,11 +1,12 @@
 # invariant/catalog/registry.py
 from __future__ import annotations
 
+import builtins
 import hashlib
 import logging
 import threading
+from collections.abc import Iterable
 from dataclasses import replace
-from typing import Dict, List, Optional, Iterable, Set, Tuple
 
 from packaging.version import InvalidVersion, Version
 
@@ -18,7 +19,6 @@ from invariant.spec.errors import (
 from invariant.spec.ids import base_id, canonical_plugin_id, split_id_version
 from invariant.spec.meta import PluginMeta
 from invariant.spec.versioning import canon_version_key
-
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +45,15 @@ class PluginRegistry:
         self,
         *,
         mode: str = "strict",
-        dev_allow_unversioned_kinds: Optional[Iterable[str]] = None,
+        dev_allow_unversioned_kinds: Iterable[str] | None = None,
     ) -> None:
         self._lock = threading.RLock()
 
         # plugin_id -> {version -> PluginDescriptor}
-        self._descriptors: Dict[str, Dict[str, PluginDescriptor]] = {}
+        self._descriptors: dict[str, dict[str, PluginDescriptor]] = {}
 
         # opaque_key -> instance
-        self._instances: Dict[str, object] = {}
+        self._instances: dict[str, object] = {}
 
         m = (mode or "").strip().lower()
         if m not in {"strict", "dev"}:
@@ -61,12 +61,12 @@ class PluginRegistry:
         self._mode = m
 
         # In dev: allow versionless plugins only from these source kinds
-        self._dev_allow_unversioned_kinds: Set[str] = set(
+        self._dev_allow_unversioned_kinds: set[str] = set(
             dev_allow_unversioned_kinds or {"filesystem"}
         )
 
         # Prevent log spam for invalid stored version keys
-        self._invalid_version_keys_logged: Set[Tuple[str, str]] = set()  # (plugin_id, version_key)
+        self._invalid_version_keys_logged: set[tuple[str, str]] = set()  # (plugin_id, version_key)
 
     # =====================================================
     # VERSIONING / IDS
@@ -234,7 +234,7 @@ class PluginRegistry:
 
             raise PluginNotFoundError(f"Plugin not found: {base_id}", meta_id=base_id)
 
-    def list(self, *, category: Optional[str] = None) -> List[PluginDescriptor]:
+    def list(self, *, category: str | None = None) -> builtins.list[PluginDescriptor]:
         # Snapshot under lock, filter outside lock
         with self._lock:
             items = [d for vmap in self._descriptors.values() for d in vmap.values()]
@@ -246,7 +246,7 @@ class PluginRegistry:
     def get_meta(self, plugin_id: str) -> PluginMeta:
         return self.resolve(plugin_id).meta
 
-    def list_meta(self, *, category: Optional[str] = None) -> list[PluginMeta]:
+    def list_meta(self, *, category: str | None = None) -> builtins.list[PluginMeta]:
         return [d.meta for d in self.list(category=category)]
 
 
@@ -254,7 +254,7 @@ class PluginRegistry:
     # INSTANCES (managed cache)
     # =====================================================
 
-    def instances(self) -> Dict[str, object]:
+    def instances(self) -> dict[str, object]:
         """
         Copy of managed instances cache.
         Key is canonical instance key (decided by runtime).
@@ -302,10 +302,10 @@ class PluginRegistry:
     # @staticmethod
     def _pick_highest_version(
         self,
-        versions: Dict[str, PluginDescriptor],
+        versions: dict[str, PluginDescriptor],
         *,
         plugin_id: str,
-    ) -> Optional[PluginDescriptor]:
+    ) -> PluginDescriptor | None:
         candidates: list[tuple[Version, PluginDescriptor]] = []
 
         for v, d in versions.items():

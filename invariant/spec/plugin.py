@@ -1,40 +1,37 @@
 # invariant/spec/plugin.py
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Optional
 
-from invariant.spec.meta import PluginMeta
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
+
 from invariant.spec.context import PluginContext
+from invariant.spec.meta import PluginMeta
+
+if TYPE_CHECKING:
+    from invariant.exec.runtime.lifecycle import PluginFSM
 
 
 class BasePlugin(ABC):
     """
     Базовый класс плагинов.
-    НЕ управляет своим жизненным циклом.
     """
+    fsm: PluginFSM
+
     def __init__(
         self,
         meta: PluginMeta | None = None,
-        context: Optional[PluginContext] = None,
+        context: PluginContext | None = None,
     ):
         self.meta = meta
         self.context = context  # capability-only
 
     @abstractmethod
     def initialize(self, **deps) -> None:
-        """
-        Вызывается PluginService.
-        Плагин не меняет состояние.
-        """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def shutdown(self) -> None:
-        """
-        Cleanup.
-        Плагин не меняет состояние.
-        """
-        pass
+        raise NotImplementedError
 
     def on_event(self, event_name: str, **kwargs: Any) -> None:
-        pass
+        return None

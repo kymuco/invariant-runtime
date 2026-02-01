@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import time
-from enum import Enum, auto
-from dataclasses import dataclass
-from typing import Callable, List, Optional
 import logging
-
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum, auto
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class PluginFSM:
         self.plugin_id = plugin_id
         self.version = version
         self.state: PluginState = PluginState.CREATED
-        self._listeners: List[Callable[[LifecycleEvent], None]] = []
+        self._listeners: list[Callable[[LifecycleEvent], None]] = []
 
     # ---------- listeners ----------
 

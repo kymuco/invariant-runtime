@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import threading
-from typing import Any, Dict
+from typing import Any
 
+from invariant.api.policies import EphemeralPolicy, ManagedPolicy
 from invariant.api.service import PluginService
-from invariant.api.policies import ManagedPolicy, EphemeralPolicy
-
+from invariant.ops.errors import InvalidCommand, RuntimeErrorBase
 from invariant.ops.supervisor import ExecutionSupervisor
-from invariant.ops.errors import RuntimeErrorBase, InvalidCommand
 from invariant.ops.watchdog import Watchdog
 
 
@@ -108,7 +107,7 @@ class RuntimeHost:
         except Exception:
             pass
 
-    def handle(self, command: Dict[str, Any]) -> Dict[str, Any]:
+    def handle(self, command: dict[str, Any]) -> dict[str, Any]:
         # periodic maintenance (never raises)
         tick_cleaned = 0
         try:
@@ -300,14 +299,14 @@ class RuntimeHost:
         except Exception as e:
             return {"ok": False, "error": "internal_error", "message": str(e)}
 
-    def _parse_policy(self, name: str):
-        if name in (None, "ephemeral"):
+    def _parse_policy(self, name: object | None):
+        if name is None or name == "ephemeral":
             return self._policies["ephemeral"]
         if name == "managed":
             return self._policies["managed"]
         raise InvalidCommand(f"Unknown policy: {name}")
 
-    def _parse_dependency_overrides(self, raw: Any) -> Dict[str, object]:
+    def _parse_dependency_overrides(self, raw: Any) -> dict[str, object]:
             """
             JSON-safe overrides:
             {"some.plugin": "managed", "other.plugin": "ephemeral"}
@@ -317,7 +316,7 @@ class RuntimeHost:
                 return {}
             if not isinstance(raw, dict):
                 raise InvalidCommand("dependency_overrides must be an object")
-            out: Dict[str, object] = {}
+            out: dict[str, object] = {}
             for k, v in raw.items():
                 if not isinstance(k, str) or not k.strip():
                     raise InvalidCommand("dependency_overrides keys must be non-empty strings")

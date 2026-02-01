@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from packaging.version import Version, InvalidVersion
+
+from packaging.version import InvalidVersion, Version
 
 from invariant.spec.meta import PluginMeta
 

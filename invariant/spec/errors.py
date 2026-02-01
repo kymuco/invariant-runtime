@@ -18,11 +18,7 @@ class PluginError(Exception):
         super().__init__(message)
         self.message = message
         self.meta_id = meta_id
-
         self.cause = cause
-        if cause is not None:
-            self.__cause__ = cause
-            
         self.traceback = traceback
 
     def __str__(self) -> str:
@@ -32,7 +28,7 @@ class PluginError(Exception):
             parts.append(f"[plugin={self.meta_id}]")
 
         if self.cause:
-            parts.append(f"cause={self.cause!r}")
+            parts.append(f"cause={type(self.cause).__name__}: {self.cause}")
 
         return " ".join(parts)
 

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import replace
 import hashlib
-from pathlib import Path
-import sys
 import importlib
 import importlib.util
 import inspect
 import logging
+import sys
+from dataclasses import replace
+from pathlib import Path
 from types import ModuleType
-from typing import List, Optional, Type, Dict
 
 from invariant.load.sources.base import PluginSource
+from invariant.spec.descriptor import PluginDescriptor
+from invariant.spec.errors import PluginLoadError
 from invariant.spec.meta import PluginMeta
 from invariant.spec.plugin import BasePlugin
-from invariant.spec.errors import PluginLoadError
-from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.source import PluginSourceSpec
 
 logger = logging.getLogger(__name__)
@@ -34,8 +33,8 @@ class FilesystemSource(PluginSource):
 
     def __init__(
         self,
-        search_paths: List[Path] | List[str],
-        project_root: Optional[Path] = None,
+        search_paths: list[Path] | list[str],
+        project_root: Path | None = None,
     ):
         self.search_paths = [Path(p) for p in search_paths]
         self.project_root = Path(project_root).resolve() if project_root else None
@@ -46,14 +45,14 @@ class FilesystemSource(PluginSource):
     # ------------------------------------------------------------------
     def discover(
         self,
-        base_class: Optional[Type] = None,
+        base_class: type | None = None,
         include_unstable: bool = False,
         *,
         dev_mode: bool = False,
         fail_fast: bool = False,
         **kwargs
-    ) -> List[PluginDescriptor]:
-        descriptors: List[PluginDescriptor] = []
+    ) -> list[PluginDescriptor]:
+        descriptors: list[PluginDescriptor] = []
 
         for base in self.search_paths:
             if not base.exists():
@@ -228,7 +227,7 @@ class FilesystemSource(PluginSource):
             raise PluginLoadError(
                 f"Plugin {source.class_name} has invalid constructor signature",
                 cause=e,
-            )
+            ) from e
 
 
     # ------------------------------------------------------------------
@@ -237,7 +236,7 @@ class FilesystemSource(PluginSource):
 
     def _extract_meta(
         self,
-        cls: Type,
+        cls: type,
         module: ModuleType,
         py: Path,
     ) -> PluginMeta:
@@ -269,7 +268,7 @@ class FilesystemSource(PluginSource):
                 name=raw_meta.get("name") or cls.__name__,
                 version=raw_meta.get("version"),
                 description=raw_meta.get("description") or cls.__doc__,
-                categories=raw_meta.get("categories") or [getattr(cls, "_CATEGORY", "plugin")],
+                categories=raw_meta.get("categories") or (getattr(cls, "_CATEGORY", "plugin"),),
                 maturity=raw_meta.get("maturity") or "stable",
                 author=raw_meta.get("author") or "local",
             )
@@ -286,7 +285,7 @@ class FilesystemSource(PluginSource):
                 name=getattr(cls, "name", cls.__name__),
                 version=getattr(cls, "VERSION", None),
                 description=getattr(cls, "__doc__", None),
-                categories=[getattr(cls, "_CATEGORY", "plugin")],
+                categories=(getattr(cls, "_CATEGORY", "plugin"),),
                 maturity="stable",
                 author=author,
             )
@@ -307,9 +306,9 @@ class FilesystemSource(PluginSource):
     def _build_id(
         self,
         *,
-        explicit_id: Optional[str],
-        cls: Optional[type],
-        author: Optional[str],
+        explicit_id: str | None,
+        cls: type | None,
+        author: str | None,
     ) -> str:
         """
         Новый контракт:
@@ -352,7 +351,7 @@ class FilesystemSource(PluginSource):
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[spec.name] = module
-                spec.loader.exec_module(module)  # type: ignore
+                spec.loader.exec_module(module)
                 return module
         except Exception as e:
             logger.warning("Failed to import plugin file %s: %s", py, e)
@@ -425,14 +424,14 @@ class FilesystemSource(PluginSource):
         sys.modules[module_name] = module
 
         try:
-            spec.loader.exec_module(module)  # type: ignore
+            spec.loader.exec_module(module)
         except Exception as e:
             sys.modules.pop(module_name, None)
             logger.exception(f"Failed to load module {module_name} from {path}: {e}")
             raise PluginLoadError(
                 f"Failed to load module {module_name} from {path}",
                 cause=e,
-            )
+            ) from e
 
         return module
 
@@ -444,10 +443,10 @@ class FilesystemSource(PluginSource):
         self,
         *,
         meta: PluginMeta,
-        cls: Optional[type],
-        module: Optional[ModuleType],
-        py: Optional[Path],
-        raw_meta: Optional[dict],
+        cls: type | None,
+        module: ModuleType | None,
+        py: Path | None,
+        raw_meta: dict | None,
     ) -> PluginSourceSpec:
 
         legacy_used: list[str] = []
@@ -457,8 +456,8 @@ class FilesystemSource(PluginSource):
                 f"Filesystem plugin {meta.id} has no file path"
             )
 
-        module_name: Optional[str] = None
-        class_name: Optional[str] = None
+        module_name: str | None = None
+        class_name: str | None = None
 
         # legacy raw_meta
         if isinstance(raw_meta, dict):

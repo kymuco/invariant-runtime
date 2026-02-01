@@ -1,16 +1,17 @@
 # invariant/exec/caps/policy.py
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping, TypedDict
+from typing import Any, TypedDict
 
 from invariant.exec.caps.ids import (
-    CAP_INSPECTOR,
-    CAP_HTTP,
-    CAP_KV,
-    CAP_FS_SANDBOX,
-    CAP_WORKSPACE,
     CAP_CONFIG_SOURCE,
+    CAP_FS_SANDBOX,
+    CAP_HTTP,
+    CAP_INSPECTOR,
+    CAP_KV,
+    CAP_WORKSPACE,
 )
 from invariant.spec.modes import InstanceMode
 

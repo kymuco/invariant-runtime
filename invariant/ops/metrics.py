@@ -1,10 +1,10 @@
 # invariant/ops/metrics.py
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
-import threading
+from typing import Any
 
 
 @dataclass
@@ -23,7 +23,7 @@ class Counter:
 
 @dataclass
 class LabeledCounter:
-    values: Dict[str, int] = field(default_factory=dict)
+    values: dict[str, int] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def inc(self, label: str, n: int = 1) -> None:
@@ -31,7 +31,7 @@ class LabeledCounter:
         with self._lock:
             self.values[k] = self.values.get(k, 0) + int(n)
 
-    def snapshot(self) -> Dict[str, int]:
+    def snapshot(self) -> dict[str, int]:
         with self._lock:
             return dict(self.values)
 
@@ -67,8 +67,8 @@ class Histogram:
     """
     count: int = 0
     total: float = 0.0
-    min: Optional[float] = None
-    max: Optional[float] = None
+    min: float | None = None
+    max: float | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def observe(self, x: float) -> None:
@@ -79,7 +79,7 @@ class Histogram:
             self.min = v if self.min is None else min(self.min, v)
             self.max = v if self.max is None else max(self.max, v)
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         with self._lock:
             avg = (self.total / self.count) if self.count else 0.0
             return {
@@ -93,7 +93,7 @@ class Histogram:
 
 @dataclass
 class LabeledHistogram:
-    values: Dict[str, Histogram] = field(default_factory=dict)
+    values: dict[str, Histogram] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def observe(self, label: str, x: float) -> None:
@@ -106,7 +106,7 @@ class LabeledHistogram:
         # observe outside dict-lock (Histogram has its own lock)
         h.observe(x)
 
-    def snapshot(self) -> Dict[str, Dict[str, Any]]:
+    def snapshot(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             items = list(self.values.items())
         return {k: h.snapshot() for k, h in items}
@@ -139,7 +139,7 @@ class RuntimeMetrics:
 
     started_at: float = field(default_factory=lambda: time.time())
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         active = int(self.executions_active)
         started_at = float(self.started_at)
 

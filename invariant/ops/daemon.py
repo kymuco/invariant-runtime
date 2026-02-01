@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import argparse
-from enum import Enum
+import hmac
 import importlib
 import json
 import logging
 import os
-import hmac
-from pathlib import Path
 import signal
 import socket
 import sys
@@ -16,8 +14,11 @@ import threading
 import time
 import traceback
 import uuid
+from collections.abc import Callable
+from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any
 
 from invariant.ops.host import RuntimeHost
 
@@ -75,12 +76,12 @@ class InvariantHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
     def __init__(
         self,
-        server_address: Tuple[str, int],
+        server_address: tuple[str, int],
         RequestHandlerClass,
         *,
         runtime_host: RuntimeHost,
-        admin_token: Optional[str],
-        api_token: Optional[str] = None,
+        admin_token: str | None,
+        api_token: str | None = None,
         max_body_bytes: int,
         log_request_bodies: bool,
         request_queue_size: int = 128,
@@ -115,7 +116,7 @@ class InvariantHTTPServer(ThreadingHTTPServer):
         self.per_client_rps = max(0.0, float(per_client_rps))
         self.per_client_burst = max(0, int(per_client_burst))
         self._rl_lock = threading.Lock()
-        self._rl: Dict[str, Tuple[float, float]] = {}  # ip -> (tokens, last_ts)
+        self._rl: dict[str, tuple[float, float]] = {}  # ip -> (tokens, last_ts)
         self._rl_max_entries = 4096
         self._rl_ttl_s = 600.0
 
@@ -180,12 +181,12 @@ class InvariantHTTPServer(ThreadingHTTPServer):
             headers = [
                 b"HTTP/1.1 503 Service Unavailable\r\n",
                 b"Content-Type: application/json; charset=utf-8\r\n",
-                f"Content-Length: {len(body)}\r\n".encode("utf-8"),
+                f"Content-Length: {len(body)}\r\n".encode(),
                 b"Connection: close\r\n",
-                f"X-Request-Id: {req_id}\r\n".encode("utf-8"),
+                f"X-Request-Id: {req_id}\r\n".encode(),
             ]
             if self.retry_after_s:
-                headers.append(f"Retry-After: {self.retry_after_s}\r\n".encode("utf-8"))
+                headers.append(f"Retry-After: {self.retry_after_s}\r\n".encode())
             headers.append(b"\r\n")
 
             request.sendall(b"".join(headers) + body)
@@ -216,10 +217,10 @@ class InvariantHTTPServer(ThreadingHTTPServer):
             headers = [
                 b"HTTP/1.1 429 Too Many Requests\r\n",
                 b"Content-Type: application/json; charset=utf-8\r\n",
-                f"Content-Length: {len(body)}\r\n".encode("utf-8"),
+                f"Content-Length: {len(body)}\r\n".encode(),
                 b"Connection: close\r\n",
-                f"X-Request-Id: {req_id}\r\n".encode("utf-8"),
-                f"Retry-After: {int(retry_after_s)}\r\n".encode("utf-8"),
+                f"X-Request-Id: {req_id}\r\n".encode(),
+                f"Retry-After: {int(retry_after_s)}\r\n".encode(),
                 b"\r\n",
             ]
             request.sendall(b"".join(headers) + body)
@@ -332,6 +333,8 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
     server_version = "InvariantDaemon/0.2"
     protocol_version = "HTTP/1.1"
 
+    _last_status: int | None = None
+
     def handle_expect_100(self) -> bool:
         """
         Support Expect: 100-continue so clients don't send huge bodies
@@ -391,7 +394,7 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
             return True
         return False
 
-    def _send_json(self, code: int, obj: Any, *, req_id: Optional[str] = None, headers: Optional[Dict[str, str]] = None) -> None:
+    def _send_json(self, code: int, obj: Any, *, req_id: str | None = None, headers: dict[str, str] | None = None) -> None:
         payload = obj
         if isinstance(payload, dict) and req_id:
             payload = dict(payload)
@@ -401,7 +404,7 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
 
         # allow metrics to see last response code
         try:
-            self._last_status = int(code)  # type: ignore[attr-defined]
+            self._last_status = int(code)
         except Exception:
             pass
 
@@ -446,7 +449,7 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
             buf.extend(chunk)
         return bytes(buf)
 
-    def _read_json(self) -> Dict[str, Any]:
+    def _read_json(self) -> dict[str, Any]:
         raw = self._read_raw_body()
         if not raw:
             return {}
@@ -472,7 +475,7 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
         auth = (self.headers.get("Authorization", "") or "").strip()
         return hmac.compare_digest(auth, f"Bearer {tok}")
 
-    def _log_exception(self, *, req_id: str, where: str, exc: Exception, body: Optional[bytes] = None) -> None:
+    def _log_exception(self, *, req_id: str, where: str, exc: Exception, body: bytes | None = None) -> None:
         # Full traceback into logs, but keep client response minimal.
         tb = traceback.format_exc()
         msg = {
@@ -502,8 +505,8 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
     def _dispatch(self, fn: Callable[[str], None]) -> None:
         req_id = self._get_req_id()
         t0 = time.perf_counter()
-        raw_body: Optional[bytes] = None
-        self._last_status = None  # type: ignore[attr-defined]
+        raw_body: bytes | None = None
+        self._last_status = None
 
         metrics = None
         try:
@@ -527,7 +530,7 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
             if self.command == "POST":
                 raw_body = self._read_raw_body()
                 # Put it back for later parsing
-                self._raw_body_cache = raw_body  # type: ignore[attr-defined]
+                self._raw_body_cache = raw_body
             fn(req_id)
         except ValueError as e:
             self._send_json(
@@ -582,8 +585,8 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
 
     # --- cached body parsing (because we pre-read in _dispatch) ---
 
-    def _read_json_cached(self) -> Dict[str, Any]:
-        raw = getattr(self, "_raw_body_cache", b"")  # type: ignore[attr-defined]
+    def _read_json_cached(self) -> dict[str, Any]:
+        raw = getattr(self, "_raw_body_cache", b"")
         if not raw:
             return {}
         try:
@@ -740,8 +743,8 @@ def run_daemon(
     factory: Callable[[], Any],
     bind: str,
     port: int,
-    admin_token: Optional[str],
-    api_token: Optional[str],
+    admin_token: str | None,
+    api_token: str | None,
     max_body_bytes: int,
     enable_watchdog: bool,
     log_request_bodies: bool,
@@ -819,7 +822,7 @@ def run_daemon(
         log.info("Daemon stopped.")
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="invariant-daemon")
 
     p.add_argument("--factory", default=os.environ.get("INVARIANT_FACTORY", ""), help="module:function")

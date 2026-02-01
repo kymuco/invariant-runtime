@@ -1,19 +1,19 @@
 # invariant/exec/caps/catalog.py
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Final
-from typing import Any, Mapping
+from typing import Any, Final
 
 from invariant.exec.caps.ids import (
-    CAP_PREFIX,
     CAP_AUDIT,
+    CAP_CONFIG_SOURCE,
     CAP_FS_SANDBOX,
     CAP_HTTP,
     CAP_INSPECTOR,
     CAP_KV,
+    CAP_PREFIX,
     CAP_WORKSPACE,
-    CAP_CONFIG_SOURCE,
 )
 from invariant.spec.versioning import canon_version_key
 

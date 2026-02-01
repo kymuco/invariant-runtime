@@ -3,16 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import List, Optional, Type
-
-from packaging.version import Version, InvalidVersion
 
 from invariant.load.sources.base import PluginSource
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
 from invariant.spec.plugin import BasePlugin
 from invariant.spec.versioning import canon_version_key
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +27,17 @@ class PluginLoader:
     - lifecycle / dependency resolution
     """
 
-    def __init__(self, sources: List[PluginSource]):
+    def __init__(self, sources: list[PluginSource]):
         self.sources = sources
 
     def discover(
         self,
-        base_class: Optional[Type] = None,
+        base_class: type | None = None,
         include_unstable: bool = False,
         *,
         mode: str = "strict",   # "strict" | "dev"
         fail_fast: bool = False,   # fail-fast discover (per-source errors)
-    ) -> List[PluginDescriptor]:
+    ) -> list[PluginDescriptor]:
         """
         Discover plugins across all sources and return PluginDescriptor list.
 
@@ -58,7 +54,7 @@ class PluginLoader:
             raise ValueError("mode must be 'strict' or 'dev'")
         dev_mode = (m == "dev")
 
-        descriptors: List[PluginDescriptor] = []
+        descriptors: list[PluginDescriptor] = []
 
         for src in self.sources:
             try:
@@ -130,7 +126,7 @@ class PluginLoader:
                     f"Bad version format for {meta_id}: {ver!r}",
                     meta_id=meta_id,
                     cause=e,
-                )
+                ) from e
 
         def source_fingerprint(d: PluginDescriptor) -> str:
             """
@@ -189,7 +185,7 @@ class PluginLoader:
                 version_label = "<unversioned>"
             else:
                 vkey = canon_version_or_raise(meta.version, meta_id=meta.id)
-                key = (meta.id, vkey)
+                key = (meta.id, vkey, "")
                 version_label = vkey
 
             prev = unique.get(key)

@@ -1,15 +1,16 @@
 # invariant/exec/caps/http.py
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional, Tuple
-from urllib.parse import urlsplit, urlunsplit
-import json
-import ssl
-import urllib.request
-import urllib.error
-import socket
 import ipaddress
+import json
+import socket
+import ssl
+import urllib.error
+import urllib.request
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from typing import Any, Literal, Self
+from urllib.parse import urlsplit, urlunsplit
 
 from invariant.exec.caps.audit import CapabilityAudit
 
@@ -87,11 +88,11 @@ def _filtered_headers(h: Mapping[str, str] | None) -> Mapping[str, str]:
     return out
 
 class _NoopSpan:
-    def __enter__(self) -> "_NoopSpan":
+    def __enter__(self) -> Self:
         return self
     def add(self, **_fields: Any) -> None:
         return
-    def __exit__(self, *_exc) -> bool:
+    def __exit__(self, *_exc: object) -> Literal[False]:
         return False
 
 
@@ -108,7 +109,7 @@ class HttpAccess:
     cap_id: str | None = None
     _audit: CapabilityAudit | None = None
 
-    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> "HttpAccess":
+    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> Self:
         return replace(self, _audit=audit, cap_id=cap_id)
 
     def _span(self, op: str, payload: dict) -> Any:
@@ -142,7 +143,8 @@ class HttpAccess:
                 raise HttpHostDenied("Host resolves to private/unsafe IP")
         
     def _open(self, req: urllib.request.Request, *, ctx: ssl.SSLContext):
-        handlers = [urllib.request.ProxyHandler({})]  # disable env proxies
+        handlers: list[urllib.request.BaseHandler] = []
+        handlers.append(urllib.request.ProxyHandler({}))  # disable env proxies
 
         if self.allow_redirects:
             handlers.append(_CheckedRedirect(self._check_url))
@@ -180,7 +182,7 @@ class HttpAccess:
                 raise HttpReadLimitExceeded(f"Response exceeded max_bytes {self.max_bytes}")
         return bytes(out)
 
-    def _get_bytes_impl(self, url: str, *, headers: Mapping[str, str] | None) -> Tuple[bytes, Optional[int]]:
+    def _get_bytes_impl(self, url: str, *, headers: Mapping[str, str] | None) -> tuple[bytes, int | None]:
         self._check_url(url)
         req = urllib.request.Request(url=url, method="GET")
         req.add_header("User-Agent", self.user_agent)

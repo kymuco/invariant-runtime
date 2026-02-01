@@ -1,20 +1,20 @@
 # invariant/api/service.py
 from __future__ import annotations
 
+from invariant.api.policies import EphemeralPolicy, ManagedPolicy
 from invariant.api.types import WorkspaceOptions
+from invariant.exec.caps.ids import CAP_CONFIG_SOURCE, CAP_INSPECTOR
+from invariant.exec.caps.inspector import RuntimeInspector
 from invariant.exec.caps.registry import (
-    CapabilityProvider,
-    is_capability_ref,
     CapabilityNotFound,
+    CapabilityProvider,
     CapabilityUnavailableError,
     CapabilityVersionMismatch,
+    is_capability_ref,
 )
-from invariant.exec.caps.inspector import RuntimeInspector
-from invariant.exec.caps.ids import CAP_INSPECTOR, CAP_CONFIG_SOURCE
-from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 from invariant.exec.runtime.execution_context import ExecutionContext
+from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 from invariant.exec.runtime.resolver import DependencyResolver
-from invariant.api.policies import EphemeralPolicy, ManagedPolicy
 from invariant.ops.ids import normalize_workspace_id
 
 

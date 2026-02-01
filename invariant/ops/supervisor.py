@@ -2,28 +2,27 @@
 from __future__ import annotations
 
 import concurrent.futures
-from contextlib import suppress
 import os
 import threading
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Any
 
 from invariant.api.service import PluginService
 from invariant.exec.runtime.execution_context import ExecutionContext
-
-from invariant.ops.trace_context import bind_execution
 from invariant.ops.errors import (
+    ExecutionLimitExceeded,
     ExecutionNotFound,
     ExecutionStateError,
-    PluginHandleNotFound,
     PluginCallError,
-    ExecutionLimitExceeded,
     PluginCallTimeout,
+    PluginHandleNotFound,
 )
 from invariant.ops.metrics import RuntimeMetrics
+from invariant.ops.trace_context import bind_execution
 
 
 class ExecutionState(Enum):
@@ -54,10 +53,10 @@ class ExecutionSession:
     last_used_at: float = field(default_factory=lambda: time.monotonic())
     ttl_seconds: int = 300
 
-    close_reason: Optional[CloseReason] = None
-    close_detail: Optional[str] = None
+    close_reason: CloseReason | None = None
+    close_detail: str | None = None
 
-    _handles: Dict[int, Any] = field(default_factory=dict)
+    _handles: dict[int, Any] = field(default_factory=dict)
     _next_handle: int = 1
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _call_gate: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -118,7 +117,7 @@ class ExecutionSession:
         try:
             return self._handles[handle]
         except KeyError:
-            raise PluginHandleNotFound(f"Unknown handle: {handle}")
+            raise PluginHandleNotFound(f"Unknown handle: {handle}") from None
 
 
 class ExecutionSupervisor:
@@ -134,7 +133,7 @@ class ExecutionSupervisor:
         cleanup_interval_seconds: int = 5,
     ):
         self._service = service
-        self._executions: Dict[str, ExecutionSession] = {}
+        self._executions: dict[str, ExecutionSession] = {}
         self._max_active = int(max_active_executions)
         self._default_ttl = int(default_ttl_seconds)
 
@@ -170,7 +169,7 @@ class ExecutionSupervisor:
 
     # ---------------- internal helpers ----------------
 
-    def _metrics(self) -> Optional[RuntimeMetrics]:
+    def _metrics(self) -> RuntimeMetrics | None:
         tracer = getattr(self._service, "tracer", None)
         return getattr(tracer, "metrics", None)
 
@@ -292,7 +291,7 @@ class ExecutionSupervisor:
             ]
 
         for eid in expired_ids:
-            msg = f"Execution expired by TTL. Auto-rollback."
+            msg = "Execution expired by TTL. Auto-rollback."
             tracer = self._tracer()
             if tracer and hasattr(tracer, "note_runtime_warning"):
                 try:
@@ -322,7 +321,7 @@ class ExecutionSupervisor:
         *,
         policy,
         dependency_overrides=None,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> str:
         # cleanup may close contexts; do it outside global lock
         self.cleanup_expired()
@@ -624,7 +623,7 @@ class ExecutionSupervisor:
         fut = pool.submit(_run)
         try:
             return fut.result(timeout=float(timeout_v))
-        except concurrent.futures.TimeoutError:
+        except concurrent.futures.TimeoutError as err:
             detail = f"plugin_call timeout: {call_label} timeout_s={timeout_v}"
             # IMPORTANT: close must be non-blocking while call continues in background thread
             self._close_execution(
@@ -633,7 +632,7 @@ class ExecutionSupervisor:
                 detail=detail,
                 was_active_hint=True,
             )
-            raise PluginCallTimeout("timeout", detail=detail)
+            raise PluginCallTimeout("timeout", detail=detail) from err
         except Exception as e:
             detail = f"{type(e).__name__}: {e}"
             if metrics:

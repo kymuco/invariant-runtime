@@ -1,23 +1,23 @@
 # invariant/ops/tracing.py
 from __future__ import annotations
 
+import threading
+import time
 from collections import OrderedDict, deque
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional
-import threading
-import time
+from typing import Any
 
 from invariant.exec.runtime.activation import ActivationEvent, ActivationEventType
 from invariant.exec.runtime.lifecycle import LifecycleEvent
-from invariant.ops.trace_context import get_current_execution_id
 from invariant.ops.metrics import RuntimeMetrics
+from invariant.ops.trace_context import get_current_execution_id
 
 
 def _safe_serialize(obj: Any) -> Any:
     # dataclass -> dict recursively
-    if is_dataclass(obj):
+    if is_dataclass(obj) and not isinstance(obj, type):
         return _safe_serialize(asdict(obj))
 
     # Enum -> stable string
@@ -77,29 +77,29 @@ class InMemoryRuntimeTracer:
         self._lock = threading.RLock()
 
         # LRU maps: key -> deque(events)
-        self._activation_by_tx: "OrderedDict[str, Deque[ActivationEvent]]" = OrderedDict()
-        self._lifecycle_by_plugin: "OrderedDict[str, Deque[LifecycleEvent]]" = OrderedDict()
-        self._execution_events: "OrderedDict[str, Deque[dict]]" = OrderedDict()
+        self._activation_by_tx: OrderedDict[str, deque[ActivationEvent]] = OrderedDict()
+        self._lifecycle_by_plugin: OrderedDict[str, deque[LifecycleEvent]] = OrderedDict()
+        self._execution_events: OrderedDict[str, deque[dict]] = OrderedDict()
 
         # recent tx ids (bounded)
-        self._activation_recent: Deque[str] = deque(maxlen=max(10, int(recent_tx_size)))
+        self._activation_recent: deque[str] = deque(maxlen=max(10, int(recent_tx_size)))
 
         # tx -> execution (bounded LRU)
-        self._tx_to_execution: "OrderedDict[str, str]" = OrderedDict()
+        self._tx_to_execution: OrderedDict[str, str] = OrderedDict()
 
         # tx timing (bounded; cleaned on END)
-        self._tx_started_at: Dict[str, float] = {}
-        self._tx_root: Dict[str, str] = {}
+        self._tx_started_at: dict[str, float] = {}
+        self._tx_root: dict[str, str] = {}
 
     # ---------------- internal: LRU helpers ----------------
 
     def _get_stream(
         self,
-        table: "OrderedDict[str, Deque[Any]]",
+        table: OrderedDict[str, deque[Any]],
         key: str,
         *,
         max_streams: int,
-    ) -> "Deque[Any]":
+    ) -> deque[Any]:
         """
         Get/create a stream deque for key and update LRU order.
         Evicts oldest streams if table grows beyond max_streams.
@@ -116,7 +116,7 @@ class InMemoryRuntimeTracer:
 
         return dq
 
-    def _lru_set(self, table: "OrderedDict[str, str]", key: str, value: str, *, max_items: int) -> None:
+    def _lru_set(self, table: OrderedDict[str, str], key: str, value: str, *, max_items: int) -> None:
         table[key] = value
         table.move_to_end(key, last=True)
         while len(table) > max_items:
@@ -184,11 +184,11 @@ class InMemoryRuntimeTracer:
 
     # ---------------- query API for RuntimeHost ----------------
 
-    def recent_activation_txs(self) -> List[str]:
+    def recent_activation_txs(self) -> list[str]:
         with self._lock:
             return list(self._activation_recent)
 
-    def activation_trace(self, tx_id: str) -> List[dict]:
+    def activation_trace(self, tx_id: str) -> list[dict]:
         with self._lock:
             stream = self._activation_by_tx.get(tx_id)
             if not stream:
@@ -196,21 +196,21 @@ class InMemoryRuntimeTracer:
             # stable snapshot
             return [_safe_serialize(e) for e in list(stream)]
 
-    def plugin_lifecycle(self, plugin_id: str) -> List[dict]:
+    def plugin_lifecycle(self, plugin_id: str) -> list[dict]:
         with self._lock:
             stream = self._lifecycle_by_plugin.get(plugin_id)
             if not stream:
                 return []
             return [_safe_serialize(e) for e in list(stream)]
 
-    def execution_trace(self, execution_id: str) -> List[dict]:
+    def execution_trace(self, execution_id: str) -> list[dict]:
         with self._lock:
             stream = self._execution_events.get(execution_id)
             if not stream:
                 return []
             return list(stream)
 
-    def execution_for_tx(self, tx_id: str) -> Optional[str]:
+    def execution_for_tx(self, tx_id: str) -> str | None:
         with self._lock:
             return self._tx_to_execution.get(tx_id)
 

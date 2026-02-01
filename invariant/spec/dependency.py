@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
+
 from invariant.spec.ids import canonical_id_or_ref
 
 

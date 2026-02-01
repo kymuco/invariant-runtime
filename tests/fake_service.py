@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class _FakeFSM:
@@ -70,7 +70,7 @@ class FakeExecutionContext:
     def __init__(self) -> None:
         self._closed = False
         self._lock = threading.RLock()
-        self._plugins: Dict[str, Any] = {}
+        self._plugins: dict[str, Any] = {}
 
     def get(self, plugin_id: str) -> Any:
         with self._lock:

@@ -1,15 +1,17 @@
 # invariant/api/policies.py
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Any, Mapping
 from pathlib import PurePosixPath
-from invariant.spec.modes import InstanceMode
+from types import MappingProxyType
+from typing import Any
+
 from invariant.exec.runtime.store import (
-    ManagedInstanceStore,
     EphemeralInstanceStore,
+    ManagedInstanceStore,
 )
+from invariant.spec.modes import InstanceMode
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,12 +1,12 @@
 # invariant/exec/caps/fs.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Optional, Mapping, Iterable
 import os
 import tempfile
-from dataclasses import replace
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any, Literal, Self
 
 from invariant.exec.caps.audit import CapabilityAudit
 
@@ -57,7 +57,7 @@ def _reject_symlink_chain(root: Path, target: Path) -> None:
     try:
         rel = target.relative_to(root)
     except Exception:
-        raise FSPathTraversalBlocked("Target escapes root")
+        raise FSPathTraversalBlocked("Target escapes root") from None
 
     cur = root
     for part in rel.parts:
@@ -68,15 +68,15 @@ def _reject_symlink_chain(root: Path, target: Path) -> None:
                 raise FSPathTraversalBlocked(f"Symlink is not allowed: {cur}")
         except OSError:
             # If stat fails, treat as suspicious
-            raise FSPathTraversalBlocked(f"Symlink check failed for: {cur}")
+            raise FSPathTraversalBlocked(f"Symlink check failed for: {cur}") from None
 
 
 class _NoopSpan:
-    def __enter__(self) -> "_NoopSpan":
+    def __enter__(self) -> Self:
         return self
     def add(self, **_fields: Any) -> None:
         return
-    def __exit__(self, *_exc) -> bool:
+    def __exit__(self, *_exc) -> Literal[False]:
         return False
 
 
@@ -104,7 +104,7 @@ class FSAccess:
         if self.write_limit <= 0:
             raise ValueError("write_limit must be > 0")
         
-    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> "FSAccess":
+    def bind_audit(self, audit: CapabilityAudit, *, cap_id: str) -> Self:
         return replace(self, _audit=audit, cap_id=cap_id)
 
     def _span(self, op: str, payload: Mapping[str, Any] | None = None) -> Any:
@@ -151,8 +151,8 @@ class FSAccess:
             p.write_bytes(data)
             return
 
-        tmp_fd: Optional[int] = None
-        tmp_path: Optional[str] = None
+        tmp_fd: int | None = None
+        tmp_path: str | None = None
         try:
             tmp_fd, tmp_path = tempfile.mkstemp(prefix=".invariant_tmp_", dir=str(p.parent))
             with os.fdopen(tmp_fd, "wb") as f:

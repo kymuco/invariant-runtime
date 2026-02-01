@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List, Optional, Type, Any
+from typing import Any
 
 from invariant.spec.descriptor import PluginDescriptor
-from invariant.spec.source import PluginSourceSpec
 from invariant.spec.plugin import BasePlugin
+from invariant.spec.source import PluginSourceSpec
 
 
 class PluginSource(ABC):
@@ -17,13 +18,13 @@ class PluginSource(ABC):
     @abstractmethod
     def discover(
         self,
-        base_class: Optional[Type] = None,
+        base_class: type | None = None,
         include_unstable: bool = False,
         *,
         dev_mode: bool = False,
         fail_fast: bool = False,
         **kwargs: Any,
-    ) -> List[PluginDescriptor]:
+    ) -> list[PluginDescriptor]:
         """
         Discover and return PluginDescriptor list.
 

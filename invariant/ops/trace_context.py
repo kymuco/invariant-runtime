@@ -1,15 +1,15 @@
 # invariant/ops/trace_context.py
 from __future__ import annotations
 
-from contextlib import contextmanager
 import contextvars
-from typing import Iterator, Optional
+from collections.abc import Iterator
+from contextlib import contextmanager
 
-_current_execution_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_current_execution_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "invariant_current_execution_id", default=None
 )
 
-def get_current_execution_id() -> Optional[str]:
+def get_current_execution_id() -> str | None:
     return _current_execution_id.get()
 
 @contextmanager

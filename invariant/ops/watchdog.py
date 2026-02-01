@@ -1,10 +1,10 @@
 # invariant/ops/watchdog.py
 from __future__ import annotations
 
+import logging
 import threading
 import time
-from typing import Callable, Optional
-import logging
+from collections.abc import Callable
 
 log = logging.getLogger("invariant.watchdog")
 
@@ -22,7 +22,7 @@ class Watchdog:
         self._callback = callback
 
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
