@@ -114,6 +114,7 @@ class PluginKernel:
 
             if hasattr(plugin, "shutdown"):
                 plugin.shutdown()
+            self._platform_close_best_effort(plugin)
 
             fsm.transition(PluginState.SHUTDOWN)
 
@@ -135,6 +136,7 @@ class PluginKernel:
         try:
             if hasattr(plugin, "shutdown"):
                 plugin.shutdown()
+            self._platform_close_best_effort(plugin)
         except Exception:
             fsm = getattr(plugin, "fsm", None)
             pid = getattr(fsm, "plugin_id", "<unknown>")
@@ -200,3 +202,21 @@ class PluginKernel:
             kwargs = {k: v for k, v in deps.items() if k in allowed}
 
         plugin.initialize(**kwargs)
+
+    def _platform_close_best_effort(self, plugin: BasePlugin) -> None:
+        """
+        Platform-only cleanup hook for wrappers/proxies created by the platform.
+        We intentionally do NOT call arbitrary .close() on user plugins.
+        """
+        try:
+            if not getattr(plugin, "__invariant_close__", False):
+                return
+            close_fn = getattr(plugin, "close", None)
+            if callable(close_fn):
+                close_fn()
+        except Exception:
+            # never allow cleanup to crash shutdown path
+            fsm = getattr(plugin, "fsm", None)
+            pid = getattr(fsm, "plugin_id", "<unknown>")
+            ver = getattr(fsm, "version", None)
+            log.exception("Platform close failed: %s@%s", pid, ver)

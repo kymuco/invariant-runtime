@@ -177,18 +177,11 @@ class ActivationTransaction:
         # Rollback must cleanup EVERYTHING created in the tx, not only READY ones.
         for pid in reversed(self.created_order):
             plugin = self.staged.get(pid)
-            if not plugin:
+            if plugin is None:
                 continue
-            try:
-                shutdown_force = getattr(self.runtime.kernel, "shutdown_force", None)
-                if callable(shutdown_force):
-                    shutdown_force(plugin=plugin)
-                else:
-                    self.runtime.kernel.shutdown(plugin=plugin)
-                self._emit(ActivationEventType.SHUTDOWN, plugin_id=pid)
-            except Exception:
-                # best-effort containment
-                pass
+
+            self._emit(ActivationEventType.SHUTDOWN, plugin_id=pid)
+            self.runtime.kernel.shutdown_force(plugin=plugin)
 
         self.staged.clear()
         self.ready_order.clear()

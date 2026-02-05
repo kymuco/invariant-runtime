@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from packaging.version import InvalidVersion, Version
 
-from invariant.spec.meta import PluginMeta
+from invariant.spec.deps import PluginDepsSpec
+
+if TYPE_CHECKING:
+    from invariant.spec.meta import PluginMeta
+else:
+    PluginMeta = Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +31,26 @@ class PluginManifest:
                 Version(version)
             except InvalidVersion as e:
                 raise ValueError("bad version format") from e
+            
+        deps = self.data.get("deps")
+        if deps is not None and not isinstance(deps, dict):
+            raise ValueError("manifest 'deps' must be an object if present")
+        if isinstance(deps, dict):
+            mode = str(deps.get("mode") or "none").strip().lower()
+            if mode not in ("none", "bundle", "online"):
+                raise ValueError("manifest 'deps.mode' must be one of none|bundle|online")
+            if mode in ("bundle", "online"):
+                req = deps.get("requirements")
+                if not isinstance(req, str) or not req.strip():
+                    raise ValueError("manifest 'deps.requirements' must be non-empty string")
+            if mode == "bundle":
+                wd = deps.get("wheels_dir")
+                if not isinstance(wd, str) or not wd.strip():
+                    raise ValueError("manifest 'deps.wheels_dir' must be non-empty string")
+
+    def to_deps(self) -> PluginDepsSpec:
+        self.validate()
+        return PluginDepsSpec.from_manifest(self.data.get("deps"))
 
     def to_meta(self) -> PluginMeta:
         self.validate()
@@ -35,7 +60,9 @@ class PluginManifest:
         except Exception as e:
             raise ValueError("manifest 'priority' must be int-coercible") from e
 
-        return PluginMeta(
+        # Import lazily to avoid pulling packaging when not needed.
+        from invariant.spec.meta import PluginMeta as _PluginMeta
+        return _PluginMeta(
             id=self.data["id"],
             version=self.data.get("version"),
             name=self.data.get("name"),

@@ -15,6 +15,7 @@ from invariant.exec.caps.registry import (
 from invariant.exec.runtime.execution_context import ExecutionContext
 from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 from invariant.exec.runtime.resolver import DependencyResolver
+from invariant.load.env.env_manager import EnvManager
 from invariant.ops.ids import normalize_workspace_id
 
 
@@ -31,6 +32,17 @@ class PluginService:
         self.registry = registry
         self.loader = loader
         self.tracer = tracer
+        self.env_manager = EnvManager()
+
+        # Best-effort: wire EnvManager into ManifestSource instances so isolated deps work
+        srcs = getattr(loader, "sources", None)
+        if isinstance(srcs, list):
+            for src in srcs:
+                try:
+                    if getattr(src, "kind", None) == "manifest" and getattr(src, "env_manager", None) is None:
+                        src.env_manager = self.env_manager
+                except Exception:
+                    pass
 
         self._managed_policy = ManagedPolicy()
         self._ephemeral_policy = EphemeralPolicy()

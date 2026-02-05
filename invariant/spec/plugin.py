@@ -5,10 +5,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from invariant.spec.context import PluginContext
-from invariant.spec.meta import PluginMeta
 
 if TYPE_CHECKING:
     from invariant.exec.runtime.lifecycle import PluginFSM
+    from invariant.spec.meta import PluginMeta
+else:
+    PluginMeta = Any  # avoid runtime import (reduces hard deps for isolated plugins)
 
 
 class BasePlugin(ABC):

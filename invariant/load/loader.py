@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Mapping
 
+from invariant.load.env.env_manager import EnvManager
+from invariant.load.isolated_proxy import IsolatedPluginProxy
 from invariant.load.sources.base import PluginSource
+from invariant.spec.deps import PluginDepsSpec
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
 from invariant.spec.plugin import BasePlugin
@@ -27,8 +31,9 @@ class PluginLoader:
     - lifecycle / dependency resolution
     """
 
-    def __init__(self, sources: list[PluginSource]):
+    def __init__(self, sources: list[PluginSource], *, env_manager: EnvManager | None = None):
         self.sources = sources
+        self._env_manager = env_manager or EnvManager()
 
     def discover(
         self,
@@ -84,6 +89,14 @@ class PluginLoader:
         """
         Load a plugin via the first suitable source.
         """
+        deps = self._deps_from_descriptor(descriptor)
+        if deps is not None and deps.is_isolated():
+            logger.info("Loading isolated plugin %s mode=%s", descriptor.meta.id, deps.mode)
+            return IsolatedPluginProxy.from_descriptor(
+                descriptor,
+                env_manager=self._env_manager,
+            )
+        
         for src in self.sources:
             if src.can_load(descriptor.source):
                 return src.load(descriptor.source, registry, descriptor=descriptor)
@@ -93,6 +106,17 @@ class PluginLoader:
             f"(available sources: {[getattr(s, 'kind', None) for s in self.sources]})",
             meta_id=descriptor.meta.id,
         )
+    
+    def _deps_from_descriptor(self, d: PluginDescriptor) -> PluginDepsSpec | None:
+        extra = getattr(d.source, "extra", None) or {}
+        raw = extra.get("deps")
+        if raw is None:
+            return None
+        if not isinstance(raw, Mapping):
+            # malformed manifest; treat as hard error
+            raise PluginLoadError(f"Invalid deps block in descriptor.source.extra for {d.meta.id}", meta_id=d.meta.id)
+        # normalize MappingProxyType -> dict
+        return PluginDepsSpec.from_manifest(dict(raw))
 
     def _dedupe(self, descriptors: list[PluginDescriptor], *, mode: str) -> list[PluginDescriptor]:
         """

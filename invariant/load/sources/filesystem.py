@@ -9,13 +9,16 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType
+from typing import TYPE_CHECKING
 
 from invariant.load.sources.base import PluginSource
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
-from invariant.spec.meta import PluginMeta
 from invariant.spec.plugin import BasePlugin
 from invariant.spec.source import PluginSourceSpec
+
+if TYPE_CHECKING:
+    from invariant.spec.meta import PluginMeta
 
 logger = logging.getLogger(__name__)
 
@@ -240,10 +243,11 @@ class FilesystemSource(PluginSource):
         module: ModuleType,
         py: Path,
     ) -> PluginMeta:
+        from invariant.spec.meta import PluginMeta as _PluginMeta
 
         raw_meta = getattr(cls, "PLUGIN_META", None)
 
-        if isinstance(raw_meta, PluginMeta):
+        if isinstance(raw_meta, _PluginMeta):
             meta = raw_meta
 
             # если id пустой, создаем новый объект с нужным id
@@ -263,7 +267,7 @@ class FilesystemSource(PluginSource):
                 cls=cls,
                 author=raw_meta.get("author"),
             )
-            meta = PluginMeta(
+            meta = _PluginMeta(
                 id=meta_id,
                 name=raw_meta.get("name") or cls.__name__,
                 version=raw_meta.get("version"),
@@ -280,7 +284,7 @@ class FilesystemSource(PluginSource):
                 or getattr(module, "__author__", None)
                 or "local"
             )
-            meta = PluginMeta(
+            meta = _PluginMeta(
                 id=self._build_id(explicit_id=None, cls=cls, author=author),
                 name=getattr(cls, "name", cls.__name__),
                 version=getattr(cls, "VERSION", None),

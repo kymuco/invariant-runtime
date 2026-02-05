@@ -1,3 +1,4 @@
+# invariant/load/sources/manifest.py
 from __future__ import annotations
 
 import hashlib
@@ -6,18 +7,18 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
+from invariant.load.env.env_manager import EnvManager
 from invariant.load.sources.base import PluginSource
+from invariant.spec.deps import PluginDepsSpec
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
-from invariant.spec.meta import PluginMeta
 from invariant.spec.plugin import BasePlugin
 from invariant.spec.source import PluginSourceSpec
 
-# поправь путь импорта под твой проект
-# from invariant.spec.dependency import DependencySpec, DependencyScope  # noqa: F401
-
+if TYPE_CHECKING:
+    from invariant.spec.meta import PluginMeta
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,9 @@ class ManifestSource(PluginSource):
 
     kind: Literal["manifest"] = "manifest"
 
-    def __init__(self, search_paths: list[Path | str]):
+    def __init__(self, search_paths: list[Path | str], *, env_manager: EnvManager | None = None):
         self.search_paths = [Path(p).resolve() for p in search_paths]
+        self.env_manager = env_manager
 
     # ------------------------------------------------------------------
     # DISCOVER
@@ -71,6 +73,15 @@ class ManifestSource(PluginSource):
                     # NOTE: base_class фильтр требует загрузки модуля, иначе не проверить issubclass.
                     # Если хочешь 100% no-reflection на discover — убери этот блок и фильтруй позже.
                     if base_class is not None:
+                        deps_raw = (descriptor.source.extra or {}).get("deps") if descriptor.source.extra else None
+                        deps = PluginDepsSpec.from_manifest(deps_raw)
+                        if deps.is_isolated():
+                            logger.info(
+                                "Skipping plugin %s during base_class filtering: isolated deps (%s) cannot be imported safely in discover()",
+                                descriptor.meta.id,
+                                deps.mode,
+                            )
+                            continue
                         mod = descriptor.source.module
                         path = descriptor.source.path
 
@@ -103,11 +114,68 @@ class ManifestSource(PluginSource):
     # READ / PARSE
     # ------------------------------------------------------------------
 
+    def _parse_timeouts_v1(self, data: dict[str, Any], path: Path) -> tuple[float | None, dict[str, float | None]]:
+        """
+        Parse optional runtime timeouts from manifest.
+
+        Supported (either):
+          - top-level:
+              call_timeout_s: number|null
+              method_timeouts: { method: number|null, ... }
+          - nested:
+              runtime: { call_timeout_s, method_timeouts }
+        """
+        runtime = data.get("runtime")
+        if runtime is None:
+            runtime = {}
+        if not isinstance(runtime, dict):
+            raise PluginLoadError(f"'runtime' must be an object in {path}")
+
+        # Nested wins over top-level if both provided
+        call_timeout_raw = runtime.get("call_timeout_s", data.get("call_timeout_s"))
+        method_timeouts_raw = runtime.get("method_timeouts", data.get("method_timeouts"))
+
+        call_timeout_s: float | None
+        if call_timeout_raw is None:
+            call_timeout_s = None
+        else:
+            if not isinstance(call_timeout_raw, (int, float)):
+                raise PluginLoadError(f"'call_timeout_s' must be number or null in {path}")
+            call_timeout_s = float(call_timeout_raw)
+            if call_timeout_s <= 0:
+                raise PluginLoadError(f"'call_timeout_s' must be > 0 or null in {path}")
+
+        method_timeouts: dict[str, float | None] = {}
+        if method_timeouts_raw is None:
+            return call_timeout_s, method_timeouts
+        if not isinstance(method_timeouts_raw, dict):
+            raise PluginLoadError(f"'method_timeouts' must be an object or null in {path}")
+
+        for k, v in method_timeouts_raw.items():
+            if not isinstance(k, str) or not k.strip():
+                raise PluginLoadError(f"'method_timeouts' keys must be non-empty strings in {path}")
+            if v is None:
+                method_timeouts[k] = None
+                continue
+            if not isinstance(v, (int, float)):
+                raise PluginLoadError(
+                    f"'method_timeouts.{k}' must be number or null in {path}"
+                )
+            fv = float(v)
+            if fv <= 0:
+                raise PluginLoadError(
+                    f"'method_timeouts.{k}' must be > 0 or null in {path}"
+                )
+            method_timeouts[k] = fv
+        return call_timeout_s, method_timeouts
+
     def _read_manifest(self, manifest_path: Path, *, dev_mode: bool) -> PluginDescriptor:
         data = self._read_json(manifest_path)
         self._validate_manifest_v1(data, manifest_path)
 
         source_block = data["source"]
+        deps_raw = data.get("deps")
+        deps = PluginDepsSpec.from_manifest(deps_raw)
 
         meta = self._parse_meta_v1(data, manifest_path)
 
@@ -117,24 +185,62 @@ class ManifestSource(PluginSource):
                 meta_id=meta.id,
             )
 
-        code_path = (manifest_path.parent / source_block["code_path"]).resolve()
+        plugin_root = manifest_path.parent.resolve()
+        code_rel = str(source_block["code_path"])
+        code_path = (plugin_root / code_rel).resolve()
         if not code_path.exists():
             raise PluginLoadError(f"Plugin code file not found: {code_path}")
+        self._ensure_under_root(plugin_root, code_path, what="source.code_path", meta_id=meta.id)
 
         module_name = self._build_module_name(manifest_path, meta)
+
+        call_timeout_s, method_timeouts = self._parse_timeouts_v1(data, manifest_path)
+
+        deps_extra: dict[str, Any] | None = None
+        if deps_raw is not None:
+            # normalize to canonical json-safe dict
+            deps_extra = {
+                "mode": deps.mode,
+                "requirements": deps.requirements,
+                "wheels_dir": deps.wheels_dir,
+                "index_url": deps.index_url,
+                "extra_index_urls": list(deps.extra_index_urls),
+                "trusted_hosts": list(deps.trusted_hosts),
+                "only_binary": deps.only_binary,
+            }
+
+        extra: dict[str, Any] = {
+            "manifest_path": str(manifest_path),
+            "manifest_version": 1,
+            "plugin_root": str(plugin_root),
+            "code_rel": code_rel,
+        }
+        
+        if deps_extra is not None:
+            extra["deps"] = deps_extra
+        if call_timeout_s is not None:
+            extra["call_timeout_s"] = call_timeout_s
+        if method_timeouts:
+            extra["method_timeouts"] = method_timeouts
 
         source = PluginSourceSpec(
             kind=self.kind,
             path=code_path,
             module=module_name,
             class_name=source_block["class_name"],
-            extra={
-                "manifest_path": str(manifest_path),
-                "manifest_version": 1,
-            },
+            extra=extra,
         )
 
         return PluginDescriptor(meta=meta, source=source)
+    
+    def _ensure_under_root(self, root: Path, p: Path, *, what: str, meta_id: str) -> None:
+        """
+        Prevent path traversal (../) escapes from plugin_root.
+        """
+        try:
+            p.resolve().relative_to(root.resolve())
+        except ValueError:
+            raise PluginLoadError(f"{what} must be under plugin_root: {p}", meta_id=meta_id) from None
 
     def _read_json(self, manifest_path: Path) -> dict[str, Any]:
         try:
@@ -154,10 +260,17 @@ class ManifestSource(PluginSource):
         return data
 
     def _parse_meta_v1(self, data: dict[str, Any], manifest_path: Path) -> PluginMeta:
+        from invariant.spec.meta import PluginMeta as _PluginMeta
+
         # Copy only fields that belong to PluginMeta (remove non-meta keys)
         meta_dict = dict(data)
         meta_dict.pop("manifest_version", None)
         meta_dict.pop("source", None)
+        meta_dict.pop("deps", None)
+        # runtime config (not PluginMeta fields)
+        meta_dict.pop("runtime", None)
+        meta_dict.pop("call_timeout_s", None)
+        meta_dict.pop("method_timeouts", None)
 
         # Normalize scalar optional strings
         for k in ("name", "description", "author", "repo"):
@@ -176,7 +289,7 @@ class ManifestSource(PluginSource):
         # meta_dict["dependencies"] = deps
 
         try:
-            meta = PluginMeta(**meta_dict)
+            meta = _PluginMeta(**meta_dict)
         except TypeError as e:
             raise PluginLoadError(f"Invalid PluginMeta in manifest: {manifest_path}", cause=e) from e
 
@@ -245,6 +358,19 @@ class ManifestSource(PluginSource):
     ) -> BasePlugin:
         if not source.module or not source.class_name or not source.path:
             raise PluginLoadError(f"Incomplete manifest source spec: {source}")
+        
+        # ---- isolated deps path (separate venv + process) ----
+        if descriptor is not None:
+            deps_raw = (descriptor.source.extra or {}).get("deps") if descriptor.source.extra else None
+            deps = PluginDepsSpec.from_manifest(deps_raw)
+            if deps.is_isolated():
+                if self.env_manager is None:
+                    raise PluginLoadError(
+                        "ManifestSource.env_manager is required for isolated plugins",
+                        meta_id=descriptor.meta.id,
+                    )
+                from invariant.load.isolated_proxy import IsolatedPluginProxy
+                return IsolatedPluginProxy(descriptor=descriptor, env_manager=self.env_manager)
 
         module = self._load_module(source.module, source.path)
 
@@ -272,7 +398,7 @@ class ManifestSource(PluginSource):
             raise PluginLoadError(
                 f"Plugin {source.class_name} constructor failed",
                 cause=e,
-            ) from None
+            ) from e
 
 
     # ------------------------------------------------------------------
@@ -305,7 +431,7 @@ class ManifestSource(PluginSource):
         except Exception as e:
             sys.modules.pop(module_name, None)
             logger.exception("Failed to load module %s from %s: %s", module_name, file, e)
-            raise PluginLoadError(f"Failed to load module {module_name} from {file}", cause=e) from None
+            raise PluginLoadError(f"Failed to load module {module_name} from {file}", cause=e) from e
 
         return module
 
@@ -316,7 +442,8 @@ class ManifestSource(PluginSource):
                 f"Unsupported manifest_version={version} in {path} (expected 1)"
             )
 
-        if "id" not in data or not isinstance(data.get("id"), str) or not data["id"].strip():
+        manifest_id = data.get("id")
+        if not isinstance(manifest_id, str) or not manifest_id.strip():
             raise PluginLoadError(f"Manifest missing valid 'id': {path}")
 
         if "source" not in data or not isinstance(data["source"], dict):
@@ -332,12 +459,60 @@ class ManifestSource(PluginSource):
 
         if not isinstance(class_name, str) or not class_name.strip():
             raise PluginLoadError(f"Manifest source missing valid class_name: {path}")
+        
+        # Optional runtime timeouts block
+        # (validation here = fast fail, actual extraction happens in _read_manifest)
+        try:
+            self._parse_timeouts_v1(data, path)
+        except PluginLoadError:
+            raise
+        except Exception as e:
+            raise PluginLoadError(f"Invalid runtime timeouts in {path}: {e}") from e
 
         deps = data.get("dependencies", [])
         if deps is None:
-            return
+            deps = []
         if not isinstance(deps, list):
             raise PluginLoadError(f"'dependencies' must be list in {path}")
         for i, dep in enumerate(deps):
             if not isinstance(dep, dict):
                 raise PluginLoadError(f"dependencies[{i}] must be object in {path}")
+
+        # Python deps block (isolation)
+        pydeps = data.get("deps")
+        if pydeps is None:
+            return  # no deps block -> ok
+        if not isinstance(pydeps, dict):
+            raise PluginLoadError(f"'deps' must be an object in {path}")
+        try:
+            spec = PluginDepsSpec.from_manifest(pydeps)
+        except Exception as e:
+            raise PluginLoadError(f"Invalid deps block in {path}: {e}") from e
+
+        # Best-effort existence checks (fast fail)
+        if spec.mode == "none":
+            return
+
+        plugin_root = path.parent.resolve()
+
+        # requirements (required for online/bundle)
+        req_rel = spec.requirements
+        if not isinstance(req_rel, str) or not req_rel.strip():
+            raise PluginLoadError(f"'deps.requirements' is required for mode={spec.mode} in {path}")
+
+        req_p = (plugin_root / req_rel).resolve()
+        if not req_p.exists():
+            raise PluginLoadError(f"'deps.requirements' not found: {req_p}")
+        self._ensure_under_root(plugin_root, req_p, what="'deps.requirements'", meta_id=manifest_id)
+
+        # wheels_dir (required for bundle)
+        if spec.mode == "bundle":
+            wd_rel = spec.wheels_dir
+            if not isinstance(wd_rel, str) or not wd_rel.strip():
+                raise PluginLoadError(f"'deps.wheels_dir' is required for bundle mode in {path}")
+
+            wd_p = (plugin_root / wd_rel).resolve()
+            if not wd_p.exists():
+                raise PluginLoadError(f"'deps.wheels_dir' not found: {wd_p}")
+            self._ensure_under_root(plugin_root, wd_p, what="'deps.wheels_dir'", meta_id=manifest_id)
+                

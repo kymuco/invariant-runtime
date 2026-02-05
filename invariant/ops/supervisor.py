@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import os
 import threading
 import time
@@ -23,6 +24,8 @@ from invariant.ops.errors import (
 )
 from invariant.ops.metrics import RuntimeMetrics
 from invariant.ops.trace_context import bind_execution
+
+log = logging.getLogger("invariant.supervisor")
 
 
 class ExecutionState(Enum):
@@ -142,6 +145,23 @@ class ExecutionSupervisor:
 
         self._lock = threading.RLock()
         self._timeout_pool: concurrent.futures.ThreadPoolExecutor | None = None
+        try:
+            self._plugin_get_timeout_s = float(os.environ.get("INVARIANT_PLUGIN_GET_TIMEOUT_S", "300"))
+        except Exception:
+            self._plugin_get_timeout_s = 300.0
+        try:
+            self._plugin_get_warn_s = float(os.environ.get("INVARIANT_PLUGIN_GET_WARN_S", "10"))
+        except Exception:
+            self._plugin_get_warn_s = 10.0
+        if self._plugin_get_timeout_s <= 0:
+            self._plugin_get_timeout_s = 0.0
+        if self._plugin_get_warn_s <= 0:
+            self._plugin_get_warn_s = 0.0
+        log.info(
+            "plugin_get watchdog: warn_s=%s timeout_s=%s",
+            self._plugin_get_warn_s,
+            self._plugin_get_timeout_s if self._plugin_get_timeout_s > 0 else None,
+        )
 
     def close(self) -> None:
         p = self._timeout_pool
@@ -408,6 +428,22 @@ class ExecutionSupervisor:
             expected_state=ExecutionState.ACTIVE,
         )
 
+    def touch(self, execution_id: str, *, ttl_seconds: int | None = None) -> dict[str, Any]:
+        session = self.get(execution_id)
+        with session._lock:
+            if session.state is not ExecutionState.ACTIVE or session._closing:
+                raise ExecutionStateError(f"Execution is not active: {session.state.name}")
+            if ttl_seconds is not None:
+                if not isinstance(ttl_seconds, int):
+                    raise ExecutionStateError("ttl_seconds must be int")
+                session.ttl_seconds = max(1, int(ttl_seconds))
+            session.touch()
+            return {
+                "execution": execution_id,
+                "ttl_s": session.ttl_seconds,
+                "idle_s": round(time.monotonic() - session.last_used_at, 3),
+            }
+
     def list_executions(self) -> list[dict]:
         with self._lock:
             out = []
@@ -431,6 +467,19 @@ class ExecutionSupervisor:
     def plugin_get(self, *, execution_id: str, plugin_id: str) -> int:
         session = self.get(execution_id)
         tracer = self._tracer()
+        t0 = time.monotonic()
+        log.info("plugin_get start exec=%s plugin=%s", execution_id, plugin_id)
+        warn_evt = threading.Event()
+        if self._plugin_get_warn_s > 0:
+            def _warn() -> None:
+                if not warn_evt.wait(self._plugin_get_warn_s):
+                    log.warning(
+                        "plugin_get slow exec=%s plugin=%s warn_s=%s",
+                        execution_id,
+                        plugin_id,
+                        self._plugin_get_warn_s,
+                    )
+            threading.Thread(target=_warn, daemon=True).start()
 
         # Phase A: cheap checks under lock (do NOT hold lock during activation)
         with session._lock:
@@ -449,9 +498,30 @@ class ExecutionSupervisor:
 
             session.touch()
 
-            # Phase B: activation outside session lock
-        with bind_execution(execution_id):
-            plugin = session.ctx.get(plugin_id)
+        # Phase B: activation outside session lock (with watchdog timeout)
+        def _load_plugin():
+            with bind_execution(execution_id):
+                return session.ctx.get(plugin_id)
+
+        try:
+            if self._plugin_get_timeout_s > 0:
+                pool = self._get_timeout_pool()
+                fut = pool.submit(_load_plugin)
+                try:
+                    plugin = fut.result(timeout=float(self._plugin_get_timeout_s))
+                except concurrent.futures.TimeoutError as err:
+                    detail = f"plugin_get timeout: {plugin_id} timeout_s={self._plugin_get_timeout_s}"
+                    self._close_execution(
+                        execution_id=execution_id,
+                        reason=CloseReason.LIMIT_ENFORCED,
+                        detail=detail,
+                        was_active_hint=True,
+                    )
+                    raise PluginCallTimeout("timeout", detail=detail) from err
+            else:
+                plugin = _load_plugin()
+        finally:
+            warn_evt.set()
 
         # Phase C: store handle under lock
         with session._lock:
@@ -467,6 +537,9 @@ class ExecutionSupervisor:
                     )
                 except Exception:
                     pass
+            dt_ms = int((time.monotonic() - t0) * 1000)
+            warn_evt.set()
+            log.info("plugin_get ok exec=%s plugin=%s dt_ms=%s", execution_id, plugin_id, dt_ms)
             return session._new_handle(plugin)
 
     def plugin_call(

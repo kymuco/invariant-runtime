@@ -106,6 +106,12 @@ class RuntimeHost:
             self._supervisor.tick()
         except Exception:
             pass
+        try:
+            env_mgr = getattr(self._service, "env_manager", None)
+            if env_mgr is not None:
+                env_mgr.gc_envs()
+        except Exception:
+            pass
 
     def handle(self, command: dict[str, Any]) -> dict[str, Any]:
         # periodic maintenance (never raises)
@@ -228,6 +234,14 @@ class RuntimeHost:
             if cmd == "execution_rollback":
                 self._supervisor.rollback(command["execution"])
                 return {"ok": True}
+            
+            if cmd == "execution_touch":
+                execution_id = command["execution"]
+                ttl = command.get("ttl_seconds")
+                if ttl is not None and not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                info = self._supervisor.touch(execution_id, ttl_seconds=ttl)
+                return {"ok": True, **info}
 
             # ---- maintenance ----
             if cmd == "list_executions":

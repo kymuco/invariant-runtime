@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from invariant.spec.meta import PluginMeta
 from invariant.spec.source import PluginSourceSpec
+
+if TYPE_CHECKING:
+    from invariant.spec.meta import PluginMeta
+else:
+    PluginMeta = Any
 
 
 @dataclass(frozen=True, slots=True)
