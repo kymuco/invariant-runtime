@@ -34,6 +34,7 @@ class ExecutionContext:
         dependency_overrides: dict[str, object] | None = None,
         workspace_id: str | None = None,
         workspace_options=None,
+        workspace_path: str | Path | None = None,
         cleanup_sandbox: bool = True,
     ):
         self.id = str(uuid.uuid4())
@@ -101,14 +102,21 @@ class ExecutionContext:
             ),
         )
 
-        if workspace_id:
+        if workspace_id and workspace_path is not None:
+            raise ValueError("workspace_id and workspace_path are mutually exclusive")
+
+        if workspace_id or workspace_path is not None:
             opts = workspace_options or WorkspaceOptions()
-            # IMPORTANT: workspace root is controlled by policy limits, not user options.
-            ws_root_dir = getattr(limits, "workspace_root_dirname", None)
-            if not ws_root_dir:
-                # backward compat fallback (still validated in WorkspaceOptions)
-                ws_root_dir = opts.root_dirname
-            workspace_root = Path.cwd() / str(ws_root_dir) / workspace_id
+            if workspace_path is not None:
+                ws_path = Path(str(workspace_path)).expanduser()
+                workspace_root = ws_path if ws_path.is_absolute() else (Path.cwd() / ws_path)
+            else:
+                # IMPORTANT: workspace root is controlled by policy limits, not user options.
+                ws_root_dir = getattr(limits, "workspace_root_dirname", None)
+                if not ws_root_dir:
+                    # backward compat fallback (still validated in WorkspaceOptions)
+                    ws_root_dir = opts.root_dirname
+                workspace_root = Path.cwd() / str(ws_root_dir) / str(workspace_id)
 
             # Merge permissions: options can only reduce rights, never increase them.
             pol_write = bool(getattr(limits, "allow_fs_write", False))

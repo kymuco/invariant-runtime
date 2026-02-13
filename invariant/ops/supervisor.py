@@ -341,6 +341,9 @@ class ExecutionSupervisor:
         *,
         policy,
         dependency_overrides=None,
+        workspace_id: str | None = None,
+        workspace_options: dict[str, Any] | None = None,
+        workspace_path: str | None = None,
         ttl_seconds: int | None = None,
     ) -> str:
         # cleanup may close contexts; do it outside global lock
@@ -353,6 +356,9 @@ class ExecutionSupervisor:
         ctx = self._service.execution(
             policy=policy,
             dependency_overrides=dependency_overrides or {},
+            workspace_id=workspace_id,
+            workspace_options=workspace_options,
+            workspace_path=workspace_path,
         )
 
         session = ExecutionSession(

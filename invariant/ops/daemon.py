@@ -755,6 +755,7 @@ def run_daemon(
     plugin_call_queue_size: int,
     per_client_rps: float,
     per_client_burst: int,
+    policy_profile: str | None,
 ) -> int:
     service = factory()
     rh = RuntimeHost(
@@ -763,6 +764,7 @@ def run_daemon(
         plugin_call_workers=int(plugin_call_workers),
         plugin_call_queue_size=int(plugin_call_queue_size),
         default_plugin_call_timeout_s=float(plugin_call_timeout_s),
+        policy_profile=policy_profile,
     )
 
     server = InvariantHTTPServer(
@@ -843,6 +845,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--plugin-call-timeout-s", type=float, default=float(os.environ.get("INVARIANT_PLUGIN_CALL_TIMEOUT_S", "10")))
     p.add_argument("--plugin-call-workers", type=int, default=int(os.environ.get("INVARIANT_PLUGIN_CALL_WORKERS", "16")))
     p.add_argument("--plugin-call-queue-size", type=int, default=int(os.environ.get("INVARIANT_PLUGIN_CALL_QUEUE_SIZE", "128")))
+    p.add_argument(
+        "--policy-profile",
+        default=os.environ.get("INVARIANT_POLICY_PROFILE", ""),
+        help="sandbox policy profile for executions: dev|stage|prod (empty = default read-only)",
+    )
 
     args = p.parse_args(argv)
 
@@ -882,6 +889,7 @@ def main(argv: list[str] | None = None) -> int:
         plugin_call_queue_size=int(args.plugin_call_queue_size),
         per_client_rps=float(args.per_client_rps),
         per_client_burst=int(args.per_client_burst),
+        policy_profile=(str(args.policy_profile).strip() or None),
     )
 
 

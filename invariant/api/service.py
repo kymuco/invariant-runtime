@@ -1,6 +1,8 @@
 # invariant/api/service.py
 from __future__ import annotations
 
+from typing import Any
+
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
 from invariant.api.types import WorkspaceOptions
 from invariant.exec.caps.ids import CAP_CONFIG_SOURCE, CAP_INSPECTOR
@@ -108,14 +110,36 @@ class PluginService:
 
     # ---------- execution-scoped ----------
 
-    def execution(self, *, policy, dependency_overrides=None, cleanup_sandbox: bool = True) -> ExecutionContext:
+    def execution(
+        self,
+        *,
+        policy,
+        dependency_overrides=None,
+        workspace_id: str | None = None,
+        workspace_options: WorkspaceOptions | dict[str, Any] | None = None,
+        workspace_path: str | None = None,
+        cleanup_sandbox: bool = True,
+    ) -> ExecutionContext:
         """
         Create execution-scoped context.
         """
+        opts: WorkspaceOptions | None
+        if workspace_options is None:
+            opts = None
+        elif isinstance(workspace_options, WorkspaceOptions):
+            opts = workspace_options
+        elif isinstance(workspace_options, dict):
+            opts = WorkspaceOptions(**workspace_options)
+        else:
+            raise TypeError("workspace_options must be WorkspaceOptions|dict|None")
+
         return ExecutionContext(
             plugin_service=self,
             policy=policy,
             dependency_overrides=dependency_overrides,
+            workspace_id=workspace_id,
+            workspace_options=opts,
+            workspace_path=workspace_path,
             cleanup_sandbox=cleanup_sandbox,
         )
     
@@ -139,8 +163,7 @@ class PluginService:
         if options is None:
             options = WorkspaceOptions()
 
-        return ExecutionContext(
-            plugin_service=self,
+        return self.execution(
             policy=policy,
             dependency_overrides=dependency_overrides,
             workspace_id=ws,

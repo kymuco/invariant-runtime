@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import concurrent.futures as cf
+import os
 import threading
 from typing import Any
 
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
+from invariant.api.policy_profiles import sandbox_limits_for_profile
 from invariant.api.service import PluginService
 from invariant.ops.errors import InvalidCommand, RuntimeErrorBase
 from invariant.ops.supervisor import ExecutionSupervisor
@@ -24,6 +26,7 @@ class RuntimeHost:
         plugin_call_workers: int = 16,
         plugin_call_queue_size: int = 128,
         default_plugin_call_timeout_s: float = 10.0,
+        policy_profile: str | None = None,
     ):
         self._service = plugin_service
         self._supervisor = ExecutionSupervisor(
@@ -41,10 +44,22 @@ class RuntimeHost:
         if enable_watchdog:
             self._watchdog.start()
 
-        self._policies = {
-            "ephemeral": EphemeralPolicy(),
-            "managed": ManagedPolicy(),
-        }
+        profile_raw = (
+            str(policy_profile).strip()
+            if isinstance(policy_profile, str) and str(policy_profile).strip()
+            else str(os.environ.get("INVARIANT_POLICY_PROFILE", "")).strip()
+        )
+        if profile_raw:
+            limits = sandbox_limits_for_profile(profile_raw)
+            self._policies = {
+                "ephemeral": EphemeralPolicy(limits=limits),
+                "managed": ManagedPolicy(limits=limits),
+            }
+        else:
+            self._policies = {
+                "ephemeral": EphemeralPolicy(),
+                "managed": ManagedPolicy(),
+            }
 
         # ---- plugin call containment (bounded resources) ----
         w = int(plugin_call_workers)
@@ -130,12 +145,24 @@ class RuntimeHost:
                 policy = self._parse_policy(command.get("policy"))
                 overrides_raw = command.get("dependency_overrides") or {}
                 overrides = self._parse_dependency_overrides(overrides_raw)
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
                 ttl = command.get("ttl_seconds")
                 if ttl is not None and not isinstance(ttl, int):
                     raise InvalidCommand("ttl_seconds must be an integer")
                 execution_id = self._supervisor.create(
                     policy=policy,
                     dependency_overrides=overrides,
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
                     ttl_seconds=ttl,
                 )
                 return {"ok": True, "execution": execution_id}
