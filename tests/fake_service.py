@@ -111,8 +111,18 @@ class FakePluginService:
         self.tracer = tracer
         self.registry = FakeRegistry()
 
-    def execution(self, *, policy, dependency_overrides=None):
-        # policy/overrides are intentionally accepted but not used here
+    def execution(
+        self,
+        *,
+        policy,
+        dependency_overrides=None,
+        workspace_id=None,
+        workspace_options=None,
+        workspace_path=None,
+        cleanup_sandbox=True,
+    ):
+        # All arguments are intentionally accepted for compatibility with RuntimeHost,
+        # but not used by the fake execution context.
         return FakeExecutionContext()
 
     def close(self) -> None:

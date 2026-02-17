@@ -26,6 +26,63 @@ from invariant.ops.metrics import RuntimeMetrics
 from invariant.ops.tracing import InMemoryRuntimeTracer
 from tests.fake_service import FakePluginService
 
+_SUITE_PATHS: dict[str, tuple[str, ...]] = {
+    "core": ("tests/core/",),
+    "agent_factory": ("tests/agent_factory/",),
+    "plugin_packs": (
+        "tests/plugin_packs_core/",
+        "tests/plugin_packs_agent_factory/",
+        "tests/plugin_packs_research/",
+    ),
+    "plugin_packs_core": ("tests/plugin_packs_core/",),
+    "plugin_packs_agent_factory": ("tests/plugin_packs_agent_factory/",),
+    "plugin_packs_research": ("tests/plugin_packs_research/",),
+}
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--suite",
+        action="store",
+        default="all",
+        help=(
+            "Logical suite selector: all, core, agent_factory, plugin_packs, "
+            "plugin_packs_core, plugin_packs_agent_factory, plugin_packs_research."
+        ),
+    )
+
+
+def _item_relpath(item: pytest.Item) -> str:
+    p = Path(str(item.fspath)).resolve()
+    try:
+        rel = p.relative_to(ROOT).as_posix()
+    except ValueError:
+        rel = p.as_posix()
+    return rel
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    suite = str(config.getoption("--suite") or "all").strip()
+    if suite == "all":
+        return
+    prefixes = _SUITE_PATHS.get(suite)
+    if prefixes is None:
+        valid = ", ".join(["all", *sorted(_SUITE_PATHS.keys())])
+        raise pytest.UsageError(f"Unknown --suite '{suite}'. Valid values: {valid}")
+
+    selected: list[pytest.Item] = []
+    deselected: list[pytest.Item] = []
+    for item in items:
+        rel = _item_relpath(item)
+        if any(rel.startswith(prefix) for prefix in prefixes):
+            selected.append(item)
+        else:
+            deselected.append(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
+
 
 @pytest.fixture()
 def metrics():
