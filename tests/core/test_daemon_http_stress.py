@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import concurrent.futures
 
@@ -19,13 +19,19 @@ def test_http_health_smoke(daemon_server):
     assert j["ok"] is True
     assert "boot_id" in j
     assert "started_at" in j
-    # request_id обязателен для корреляции в проде
+    assert "agent_run_worker" in j
+    assert isinstance(j["agent_run_worker"], dict)
+    assert j["agent_run_worker"].get("enabled") is False
+    assert "agent_run_alerting" in j
+    assert isinstance(j["agent_run_alerting"], dict)
+    assert j["agent_run_alerting"].get("enabled") is False
+    # request_id РѕР±СЏР·Р°С‚РµР»РµРЅ РґР»СЏ РєРѕСЂСЂРµР»СЏС†РёРё РІ РїСЂРѕРґРµ
     assert "request_id" in j
 
 
 def test_http_rejects_wrong_content_type(daemon_server):
     host, port = daemon_server.server_address
-    # намеренно ставим text/plain
+    # РЅР°РјРµСЂРµРЅРЅРѕ СЃС‚Р°РІРёРј text/plain
     r = http_json(
         host,
         port,
@@ -43,8 +49,8 @@ def test_http_rejects_wrong_content_type(daemon_server):
 def test_http_max_body_bytes_enforced(daemon_server):
     host, port = daemon_server.server_address
 
-    # делаем тело больше лимита (1MiB в фикстуре) — но тут достаточно и меньше,
-    # если вы захотите параметризовать max_body_bytes в фикстуре.
+    # РґРµР»Р°РµРј С‚РµР»Рѕ Р±РѕР»СЊС€Рµ Р»РёРјРёС‚Р° (1MiB РІ С„РёРєСЃС‚СѓСЂРµ) вЂ” РЅРѕ С‚СѓС‚ РґРѕСЃС‚Р°С‚РѕС‡РЅРѕ Рё РјРµРЅСЊС€Рµ,
+    # РµСЃР»Рё РІС‹ Р·Р°С…РѕС‚РёС‚Рµ РїР°СЂР°РјРµС‚СЂРёР·РѕРІР°С‚СЊ max_body_bytes РІ С„РёРєСЃС‚СѓСЂРµ.
     big = {"cmd": "execution_plugin_call", "junk": "x" * (2 * 1024 * 1024)}
 
     # IMPORTANT: on Windows http.client is flaky for Expect: 100-continue.
@@ -71,14 +77,14 @@ def test_http_shutdown_requires_token(daemon_server):
 @pytest.mark.stress
 def test_http_busy_rejection_under_load(daemon_server):
     """
-    Реальный стресс:
-    - max_concurrent_requests=8 (в фикстуре)
-    - закидываем больше параллельных запросов, чем лимит
-    - ожидаем, что часть будет 503 busy (быстро, предсказуемо), а часть 200.
+    Р РµР°Р»СЊРЅС‹Р№ СЃС‚СЂРµСЃСЃ:
+    - max_concurrent_requests=8 (РІ С„РёРєСЃС‚СѓСЂРµ)
+    - Р·Р°РєРёРґС‹РІР°РµРј Р±РѕР»СЊС€Рµ РїР°СЂР°Р»Р»РµР»СЊРЅС‹С… Р·Р°РїСЂРѕСЃРѕРІ, С‡РµРј Р»РёРјРёС‚
+    - РѕР¶РёРґР°РµРј, С‡С‚Рѕ С‡Р°СЃС‚СЊ Р±СѓРґРµС‚ 503 busy (Р±С‹СЃС‚СЂРѕ, РїСЂРµРґСЃРєР°Р·СѓРµРјРѕ), Р° С‡Р°СЃС‚СЊ 200.
     """
     host, port = daemon_server.server_address
 
-    # подготовка: create_execution + get handle на sleep-plugin
+    # РїРѕРґРіРѕС‚РѕРІРєР°: create_execution + get handle РЅР° sleep-plugin
     r = http_json(host, port, "POST", "/v1/handle", {"cmd": "create_execution", "policy": "ephemeral", "ttl_seconds": 20})
     assert r.status == 200, r.body
     exec_id = r.json()["execution"]
@@ -105,14 +111,15 @@ def test_http_busy_rejection_under_load(daemon_server):
     ok200 = codes.count(200)
     busy503 = codes.count(503)
 
-    # В проде нормальная картина под перегрузом:
-    # - часть принята (200)
-    # - часть отвергнута предсказуемо (503 busy)
+    # Р’ РїСЂРѕРґРµ РЅРѕСЂРјР°Р»СЊРЅР°СЏ РєР°СЂС‚РёРЅР° РїРѕРґ РїРµСЂРµРіСЂСѓР·РѕРј:
+    # - С‡Р°СЃС‚СЊ РїСЂРёРЅСЏС‚Р° (200)
+    # - С‡Р°СЃС‚СЊ РѕС‚РІРµСЂРіРЅСѓС‚Р° РїСЂРµРґСЃРєР°Р·СѓРµРјРѕ (503 busy)
     assert ok200 > 0, {"codes_sample": codes[:20]}
     assert busy503 > 0, {"ok200": ok200, "busy503": busy503, "codes_sample": codes[:20]}
 
-    # busy ответы должны содержать request_id + (в идеале) Retry-After
+    # busy РѕС‚РІРµС‚С‹ РґРѕР»Р¶РЅС‹ СЃРѕРґРµСЂР¶Р°С‚СЊ request_id + (РІ РёРґРµР°Р»Рµ) Retry-After
     busy = [x for x in resps if x.status == 503]
     j0 = busy[0].json()
     assert j0["ok"] is False and j0["error"] == "busy"
     assert "request_id" in j0
+

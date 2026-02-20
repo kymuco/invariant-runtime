@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import concurrent.futures as cf
+import logging
 import os
 import threading
+from collections.abc import Mapping
 from typing import Any
 
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
@@ -12,6 +14,8 @@ from invariant.api.service import PluginService
 from invariant.ops.errors import InvalidCommand, RuntimeErrorBase
 from invariant.ops.supervisor import ExecutionSupervisor
 from invariant.ops.watchdog import Watchdog
+
+log = logging.getLogger(__name__)
 
 
 class RuntimeHost:
@@ -51,9 +55,10 @@ class RuntimeHost:
         )
         if profile_raw:
             limits = sandbox_limits_for_profile(profile_raw)
+            policy_config = self._policy_config_for_profile(profile_raw)
             self._policies = {
-                "ephemeral": EphemeralPolicy(limits=limits),
-                "managed": ManagedPolicy(limits=limits),
+                "ephemeral": EphemeralPolicy(limits=limits, config=policy_config),
+                "managed": ManagedPolicy(limits=limits, config=policy_config),
             }
         else:
             self._policies = {
@@ -270,6 +275,370 @@ class RuntimeHost:
                 info = self._supervisor.touch(execution_id, ttl_seconds=ttl)
                 return {"ok": True, **info}
 
+            # ---- app-level Agent Factory run API ----
+            if cmd == "agent_run_submit":
+                pipeline = command.get("pipeline")
+                if not isinstance(pipeline, str) or not pipeline.strip():
+                    raise InvalidCommand("pipeline must be a non-empty string")
+                inputs = command.get("inputs")
+                if inputs is None:
+                    inputs_obj: dict[str, Any] = {}
+                elif isinstance(inputs, dict):
+                    inputs_obj = dict(inputs)
+                else:
+                    raise InvalidCommand("inputs must be an object")
+
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+
+                fail_fast = command.get("fail_fast")
+                if fail_fast is not None and not isinstance(fail_fast, bool):
+                    raise InvalidCommand("fail_fast must be boolean|null")
+                include_outputs = command.get("include_outputs")
+                if include_outputs is not None and not isinstance(include_outputs, bool):
+                    raise InvalidCommand("include_outputs must be boolean|null")
+                max_steps = command.get("max_steps")
+                if max_steps is not None and not isinstance(max_steps, int):
+                    raise InvalidCommand("max_steps must be integer|null")
+
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+
+                idempotency_key = command.get("idempotency_key")
+                if idempotency_key is not None and not isinstance(idempotency_key, str):
+                    raise InvalidCommand("idempotency_key must be a string")
+                defer_execution = command.get("defer_execution", False)
+                if not isinstance(defer_execution, bool):
+                    raise InvalidCommand("defer_execution must be a boolean")
+                max_attempts = command.get("max_attempts", 3)
+                if not isinstance(max_attempts, int):
+                    raise InvalidCommand("max_attempts must be an integer")
+                lease_seconds = command.get("lease_seconds", 120)
+                if not isinstance(lease_seconds, int):
+                    raise InvalidCommand("lease_seconds must be an integer")
+                step_timeout_seconds = command.get("step_timeout_seconds", 1200)
+                if not isinstance(step_timeout_seconds, int):
+                    raise InvalidCommand("step_timeout_seconds must be an integer")
+                backoff_base_seconds = command.get("backoff_base_seconds", 5)
+                if not isinstance(backoff_base_seconds, int):
+                    raise InvalidCommand("backoff_base_seconds must be an integer")
+
+                run = self._agent_run_call(
+                    "run_submit",
+                    pipeline=str(pipeline).strip(),
+                    inputs=inputs_obj,
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    idempotency_key=(str(idempotency_key).strip() if isinstance(idempotency_key, str) else None),
+                    fail_fast=fail_fast,
+                    include_outputs=include_outputs,
+                    max_steps=max_steps,
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                    defer_execution=bool(defer_execution),
+                    max_attempts=int(max_attempts),
+                    lease_seconds=int(lease_seconds),
+                    step_timeout_seconds=int(step_timeout_seconds),
+                    backoff_base_seconds=int(backoff_base_seconds),
+                )
+                return {"ok": True, "run": run}
+
+            if cmd == "agent_run_status":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                out = self._agent_run_call("run_status", run_id=str(run_id).strip())
+                return {"ok": True, "run": out}
+
+            if cmd == "agent_run_report":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                out = self._agent_run_call("run_report", run_id=str(run_id).strip())
+                return {"ok": True, "report": out}
+
+            if cmd == "agent_run_list":
+                limit = command.get("limit", 50)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                out = self._agent_run_call("run_list", limit=int(limit))
+                return {"ok": True, **out}
+
+            if cmd == "agent_run_health":
+                limit = command.get("limit", 1000)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                repair = command.get("repair", False)
+                if not isinstance(repair, bool):
+                    raise InvalidCommand("repair must be a boolean")
+                out = self._agent_run_call("run_health", limit=int(limit), repair=bool(repair))
+                return {"ok": True, "health": out}
+
+            if cmd == "agent_run_observability":
+                limit = command.get("limit", 1000)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                fail_spike_window = command.get("fail_spike_window", 20)
+                if not isinstance(fail_spike_window, int):
+                    raise InvalidCommand("fail_spike_window must be an integer")
+                fail_spike_threshold_pct = command.get("fail_spike_threshold_pct", 40.0)
+                if not isinstance(fail_spike_threshold_pct, (int, float)):
+                    raise InvalidCommand("fail_spike_threshold_pct must be numeric")
+                stuck_run_seconds = command.get("stuck_run_seconds", 1800)
+                if not isinstance(stuck_run_seconds, int):
+                    raise InvalidCommand("stuck_run_seconds must be an integer")
+                replay_target_pct = command.get("replay_target_pct", 95.0)
+                if not isinstance(replay_target_pct, (int, float)):
+                    raise InvalidCommand("replay_target_pct must be numeric")
+                trace_target_pct = command.get("trace_target_pct", 100.0)
+                if not isinstance(trace_target_pct, (int, float)):
+                    raise InvalidCommand("trace_target_pct must be numeric")
+
+                out = self._agent_run_call(
+                    "run_observability",
+                    limit=int(limit),
+                    fail_spike_window=int(fail_spike_window),
+                    fail_spike_threshold_pct=float(fail_spike_threshold_pct),
+                    stuck_run_seconds=int(stuck_run_seconds),
+                    replay_target_pct=float(replay_target_pct),
+                    trace_target_pct=float(trace_target_pct),
+                )
+                return {"ok": True, "observability": out}
+
+            if cmd == "agent_run_queue_stats":
+                out = self._agent_run_call("run_queue_stats")
+                return {"ok": True, "queue": out}
+
+            if cmd == "agent_run_queue_reclaim":
+                limit = command.get("limit", 100)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                out = self._agent_run_call("run_queue_reclaim", limit=int(limit))
+                return {"ok": True, **out}
+
+            if cmd == "agent_run_worker_process":
+                worker_id = command.get("worker_id")
+                if worker_id is None:
+                    worker_id = ""
+                if not isinstance(worker_id, str):
+                    raise InvalidCommand("worker_id must be a string")
+                lease_seconds = command.get("lease_seconds")
+                if lease_seconds is not None and not isinstance(lease_seconds, int):
+                    raise InvalidCommand("lease_seconds must be integer|null")
+                reclaim_expired = command.get("reclaim_expired", True)
+                if not isinstance(reclaim_expired, bool):
+                    raise InvalidCommand("reclaim_expired must be a boolean")
+                out = self._agent_run_call(
+                    "run_queue_process",
+                    worker_id=str(worker_id).strip(),
+                    lease_seconds=(int(lease_seconds) if isinstance(lease_seconds, int) else None),
+                    reclaim_expired=bool(reclaim_expired),
+                )
+                return {"ok": True, "worker": out}
+
+            if cmd == "agent_run_dlq":
+                limit = command.get("limit", 100)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                out = self._agent_run_call("run_dlq", limit=int(limit))
+                return {"ok": True, "dlq": out}
+
+            if cmd == "agent_run_cancel":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                reason = command.get("reason", "cancel_requested")
+                if not isinstance(reason, str):
+                    raise InvalidCommand("reason must be a string")
+                out = self._agent_run_call("run_cancel", run_id=str(run_id).strip(), reason=str(reason).strip())
+                return {"ok": True, "run": out}
+
+            if cmd == "agent_run_resume":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+                out = self._agent_run_call(
+                    "run_resume",
+                    run_id=str(run_id).strip(),
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                )
+                return {"ok": True, "run": out}
+
+            if cmd == "agent_run_abort":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+                out = self._agent_run_call(
+                    "run_abort",
+                    run_id=str(run_id).strip(),
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                )
+                return {"ok": True, "run": out}
+
+            if cmd == "agent_run_approve":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                stage = command.get("stage")
+                if not isinstance(stage, str) or not stage.strip():
+                    raise InvalidCommand("stage must be a non-empty string")
+                token = command.get("token")
+                if not isinstance(token, str) or not token.strip():
+                    raise InvalidCommand("token must be a non-empty string")
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+                out = self._agent_run_call(
+                    "run_approve",
+                    run_id=str(run_id).strip(),
+                    stage=str(stage).strip(),
+                    token=str(token).strip(),
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                )
+                return {"ok": True, "run": out}
+
+            if cmd == "agent_run_replay":
+                run_id = command.get("run_id")
+                if not isinstance(run_id, str) or not run_id.strip():
+                    raise InvalidCommand("run_id must be a non-empty string")
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                strict = command.get("strict", True)
+                if not isinstance(strict, bool):
+                    raise InvalidCommand("strict must be a boolean")
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+                out = self._agent_run_call(
+                    "run_replay",
+                    run_id=str(run_id).strip(),
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                    strict=bool(strict),
+                )
+                return {"ok": True, "replay": out}
+
+            if cmd == "agent_run_replay_batch":
+                limit = command.get("limit", 200)
+                if not isinstance(limit, int):
+                    raise InvalidCommand("limit must be an integer")
+                max_runs = command.get("max_runs", 20)
+                if not isinstance(max_runs, int):
+                    raise InvalidCommand("max_runs must be an integer")
+                cooldown_seconds = command.get("cooldown_seconds", 900.0)
+                if not isinstance(cooldown_seconds, (int, float)):
+                    raise InvalidCommand("cooldown_seconds must be numeric")
+                strict = command.get("strict", True)
+                if not isinstance(strict, bool):
+                    raise InvalidCommand("strict must be a boolean")
+                policy = self._parse_policy(command.get("policy"))
+                ttl = command.get("ttl_seconds", 1200)
+                if not isinstance(ttl, int):
+                    raise InvalidCommand("ttl_seconds must be an integer")
+                workspace_id = command.get("workspace_id")
+                workspace_options = command.get("workspace_options")
+                workspace_path = command.get("workspace_path")
+                if workspace_id is not None and not isinstance(workspace_id, str):
+                    raise InvalidCommand("workspace_id must be a string")
+                if workspace_options is not None and not isinstance(workspace_options, dict):
+                    raise InvalidCommand("workspace_options must be an object")
+                if workspace_path is not None and not isinstance(workspace_path, str):
+                    raise InvalidCommand("workspace_path must be a string")
+                if workspace_id and workspace_path:
+                    raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
+                out = self._agent_run_call(
+                    "run_replay_batch",
+                    limit=int(limit),
+                    max_runs=int(max_runs),
+                    cooldown_seconds=float(cooldown_seconds),
+                    strict=bool(strict),
+                    policy=policy,
+                    ttl_seconds=int(ttl),
+                    workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
+                    workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
+                    workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                )
+                return {"ok": True, "batch": out}
+            
             # ---- maintenance ----
             if cmd == "list_executions":
                 return {"ok": True, "executions": self._supervisor.list_executions()}
@@ -339,6 +708,28 @@ class RuntimeHost:
             return {"ok": False, "error": getattr(e, "code", e.__class__.__name__), "message": str(e)}
         except Exception as e:
             return {"ok": False, "error": "internal_error", "message": str(e)}
+
+    def _agent_run_call(self, method_name: str, /, **kwargs: Any) -> dict[str, Any]:
+        method = getattr(self._service, method_name, None)
+        if not callable(method):
+            raise InvalidCommand("agent run API is not available in this service")
+        result = method(**kwargs)
+        if not isinstance(result, dict):
+            raise InvalidCommand(f"{method_name} must return object payload")
+        return dict(result)
+
+    def _policy_config_for_profile(self, profile: str) -> dict[str, Any]:
+        provider = getattr(self._service, "policy_config_for_profile", None)
+        if not callable(provider):
+            return {}
+        raw = provider(profile)
+        if raw is None:
+            return {}
+        if not isinstance(raw, Mapping):
+            raise InvalidCommand("policy_config_for_profile must return object-like mapping")
+        cfg = dict(raw)
+        log.info("Loaded profile config keys=%s profile=%s", len(cfg), profile)
+        return cfg
 
     def _parse_policy(self, name: object | None):
         if name is None or name == "ephemeral":

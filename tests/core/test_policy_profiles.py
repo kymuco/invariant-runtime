@@ -37,6 +37,15 @@ def test_sandbox_limits_for_profile_defaults() -> None:
     assert dev.allow_env_config is True
     assert stage.allow_env_config is False
     assert prod.allow_env_config is False
+    assert dev.allow_network is False
+    assert stage.allow_network is False
+    assert prod.allow_network is False
+    assert dev.http_allow_any_host is False
+    assert stage.http_allow_any_host is False
+    assert prod.http_allow_any_host is False
+    assert dev.http_allow_hosts == ()
+    assert stage.http_allow_hosts == ()
+    assert prod.http_allow_hosts == ()
 
 
 def test_sandbox_limits_for_profile_overrides() -> None:
