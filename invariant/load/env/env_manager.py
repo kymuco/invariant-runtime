@@ -69,9 +69,10 @@ class EnvManager:
         self.locks_dir.mkdir(parents=True, exist_ok=True)
         self._gc_last_at = 0.0
         try:
-            self._gc_ttl_s = float(os.environ.get("INVARIANT_ENV_GC_TTL_S", str(20 * 60)))
+            # Default: keep envs across restarts; cleanup by size pressure only.
+            self._gc_ttl_s = float(os.environ.get("INVARIANT_ENV_GC_TTL_S", "0"))
         except Exception:
-            self._gc_ttl_s = 20 * 60.0
+            self._gc_ttl_s = 0.0
         try:
             self._gc_interval_s = float(os.environ.get("INVARIANT_ENV_GC_INTERVAL_S", str(60)))
         except Exception:
