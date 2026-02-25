@@ -102,6 +102,32 @@ class _RunApiService(FakePluginService):
         self.calls.append(("run_dlq", {"limit": int(limit)}))
         return {"items": [], "count": 0}
 
+    def run_migrate_storage(
+        self,
+        *,
+        dry_run: bool = True,
+        backup_legacy: bool = True,
+        prune_legacy: bool = False,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "run_migrate_storage",
+                {
+                    "dry_run": bool(dry_run),
+                    "backup_legacy": bool(backup_legacy),
+                    "prune_legacy": bool(prune_legacy),
+                    "force": bool(force),
+                },
+            )
+        )
+        return {
+            "ok": True,
+            "dry_run": bool(dry_run),
+            "changed": True,
+            "post": {"queue_items": 1, "dlq_items": 0, "idempotency_items": 1},
+        }
+
     def run_cancel(self, *, run_id: str, reason: str = "cancel_requested") -> dict[str, Any]:
         self.calls.append(("run_cancel", {"run_id": run_id, "reason": reason}))
         return {"run_id": run_id, "state": "aborted", "cancel_reason": reason}
@@ -146,8 +172,8 @@ class _RunApiService(FakePluginService):
         }
 
 
-def _host(service: FakePluginService) -> RuntimeHost:
-    return RuntimeHost(plugin_service=service, enable_watchdog=False)
+def _host(service: FakePluginService, *, policy_profile: str | None = None) -> RuntimeHost:
+    return RuntimeHost(plugin_service=service, enable_watchdog=False, policy_profile=policy_profile)
 
 
 def test_agent_run_submit_routes_and_parses_payload():
@@ -186,7 +212,48 @@ def test_agent_run_submit_routes_and_parses_payload():
         assert payload["lease_seconds"] == 90
         assert payload["step_timeout_seconds"] == 300
         assert payload["backoff_base_seconds"] == 2
+        assert payload["allow_experimental"] is False
         assert isinstance(payload["policy"], ManagedPolicy)
+    finally:
+        host.close()
+
+
+def test_agent_run_submit_forwards_host_policy_profile():
+    service = _RunApiService()
+    host = _host(service, policy_profile="stage")
+    try:
+        out = host.handle(
+            {
+                "cmd": "agent_run_submit",
+                "pipeline": "safe_fix",
+                "inputs": {"goal": "lint stage"},
+                "policy": "ephemeral",
+            }
+        )
+        assert out["ok"] is True
+        method, payload = service.calls[-1]
+        assert method == "run_submit"
+        assert payload["policy_profile"] == "stage"
+    finally:
+        host.close()
+
+
+def test_agent_run_submit_forwards_experimental_opt_in():
+    service = _RunApiService()
+    host = _host(service)
+    try:
+        out = host.handle(
+            {
+                "cmd": "agent_run_submit",
+                "pipeline": "coding_agent_llm_multi_patch",
+                "inputs": {"goal": "experimental"},
+                "experimental": True,
+            }
+        )
+        assert out["ok"] is True
+        method, payload = service.calls[-1]
+        assert method == "run_submit"
+        assert payload["allow_experimental"] is True
     finally:
         host.close()
 
@@ -216,6 +283,15 @@ def test_agent_run_other_commands_route_to_service_methods():
             {"cmd": "agent_run_worker_process", "worker_id": "w-1", "lease_seconds": 45, "reclaim_expired": False}
         )
         dlq = host.handle({"cmd": "agent_run_dlq", "limit": 4})
+        migration = host.handle(
+            {
+                "cmd": "agent_run_migrate_storage",
+                "dry_run": False,
+                "backup_legacy": True,
+                "prune_legacy": True,
+                "force": True,
+            }
+        )
         cancelled = host.handle({"cmd": "agent_run_cancel", "run_id": "af-run-1", "reason": "manual_stop"})
         resumed = host.handle({"cmd": "agent_run_resume", "run_id": "af-run-1", "policy": "ephemeral"})
         aborted = host.handle({"cmd": "agent_run_abort", "run_id": "af-run-1"})
@@ -256,6 +332,7 @@ def test_agent_run_other_commands_route_to_service_methods():
         assert queue_reclaim["ok"] is True and queue_reclaim["reclaimed"] == 1
         assert queue_process["ok"] is True and queue_process["worker"]["claimed"] is False
         assert dlq["ok"] is True and dlq["dlq"]["count"] == 0
+        assert migration["ok"] is True and migration["migration"]["changed"] is True
         assert cancelled["ok"] is True and cancelled["run"]["state"] == "aborted"
         assert resumed["ok"] is True and resumed["run"]["state"] == "running"
         assert aborted["ok"] is True and aborted["run"]["state"] == "aborted"
@@ -282,6 +359,10 @@ def test_agent_run_other_commands_route_to_service_methods():
         assert by_name["run_queue_process"]["lease_seconds"] == 45
         assert by_name["run_queue_process"]["reclaim_expired"] is False
         assert by_name["run_dlq"]["limit"] == 4
+        assert by_name["run_migrate_storage"]["dry_run"] is False
+        assert by_name["run_migrate_storage"]["backup_legacy"] is True
+        assert by_name["run_migrate_storage"]["prune_legacy"] is True
+        assert by_name["run_migrate_storage"]["force"] is True
         assert by_name["run_cancel"]["run_id"] == "af-run-1"
         assert by_name["run_cancel"]["reason"] == "manual_stop"
         assert by_name["run_replay"]["strict"] is False
@@ -323,6 +404,60 @@ def test_agent_run_submit_reports_invalid_policy():
         )
         assert out["ok"] is False
         assert out["error"] == "invalid_command"
+    finally:
+        host.close()
+
+
+def test_agent_run_submit_rejects_non_boolean_experimental():
+    service = _RunApiService()
+    host = _host(service)
+    try:
+        out = host.handle(
+            {
+                "cmd": "agent_run_submit",
+                "pipeline": "safe_fix",
+                "experimental": "yes",
+            }
+        )
+        assert out["ok"] is False
+        assert out["error"] == "invalid_command"
+    finally:
+        host.close()
+
+
+def test_agent_run_commands_reject_invalid_run_id():
+    invalid_ids = [
+        "",
+        "   ",
+        "../../etc/passwd",
+        "..\\..\\etc\\passwd",
+        "af/run-1",
+        "af\\run-1",
+        "a" * 129,
+    ]
+    command_templates = [
+        {"cmd": "agent_run_status"},
+        {"cmd": "agent_run_report"},
+        {"cmd": "agent_run_cancel"},
+        {"cmd": "agent_run_resume"},
+        {"cmd": "agent_run_abort"},
+        {"cmd": "agent_run_approve", "stage": "EDIT", "token": "tok-123"},
+        {"cmd": "agent_run_replay"},
+    ]
+
+    service = _RunApiService()
+    host = _host(service)
+    try:
+        for template in command_templates:
+            for bad_id in invalid_ids:
+                cmd = dict(template)
+                cmd["run_id"] = bad_id
+                out = host.handle(cmd)
+                assert out["ok"] is False
+                assert out["error"] == "invalid_command"
+
+        called_methods = [name for name, _payload in service.calls]
+        assert called_methods == []
     finally:
         host.close()
 

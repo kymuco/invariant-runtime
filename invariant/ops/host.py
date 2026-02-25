@@ -4,6 +4,7 @@ from __future__ import annotations
 import concurrent.futures as cf
 import logging
 import os
+import re
 import threading
 from collections.abc import Mapping
 from typing import Any
@@ -16,6 +17,8 @@ from invariant.ops.supervisor import ExecutionSupervisor
 from invariant.ops.watchdog import Watchdog
 
 log = logging.getLogger(__name__)
+_RUN_ID_MAX_LEN = 128
+_RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class RuntimeHost:
@@ -53,6 +56,7 @@ class RuntimeHost:
             if isinstance(policy_profile, str) and str(policy_profile).strip()
             else str(os.environ.get("INVARIANT_POLICY_PROFILE", "")).strip()
         )
+        self._policy_profile: str | None = profile_raw or None
         if profile_raw:
             limits = sandbox_limits_for_profile(profile_raw)
             policy_config = self._policy_config_for_profile(profile_raw)
@@ -333,12 +337,16 @@ class RuntimeHost:
                 backoff_base_seconds = command.get("backoff_base_seconds", 5)
                 if not isinstance(backoff_base_seconds, int):
                     raise InvalidCommand("backoff_base_seconds must be an integer")
+                experimental = command.get("experimental", False)
+                if not isinstance(experimental, bool):
+                    raise InvalidCommand("experimental must be a boolean")
 
                 run = self._agent_run_call(
                     "run_submit",
                     pipeline=str(pipeline).strip(),
                     inputs=inputs_obj,
                     policy=policy,
+                    policy_profile=self._policy_profile,
                     ttl_seconds=int(ttl),
                     idempotency_key=(str(idempotency_key).strip() if isinstance(idempotency_key, str) else None),
                     fail_fast=fail_fast,
@@ -347,6 +355,7 @@ class RuntimeHost:
                     workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
                     workspace_options=(dict(workspace_options) if isinstance(workspace_options, dict) else None),
                     workspace_path=(workspace_path.strip() if isinstance(workspace_path, str) else None),
+                    allow_experimental=bool(experimental),
                     defer_execution=bool(defer_execution),
                     max_attempts=int(max_attempts),
                     lease_seconds=int(lease_seconds),
@@ -356,17 +365,13 @@ class RuntimeHost:
                 return {"ok": True, "run": run}
 
             if cmd == "agent_run_status":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
-                out = self._agent_run_call("run_status", run_id=str(run_id).strip())
+                run_id = self._normalize_run_id(command.get("run_id"))
+                out = self._agent_run_call("run_status", run_id=run_id)
                 return {"ok": True, "run": out}
 
             if cmd == "agent_run_report":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
-                out = self._agent_run_call("run_report", run_id=str(run_id).strip())
+                run_id = self._normalize_run_id(command.get("run_id"))
+                out = self._agent_run_call("run_report", run_id=run_id)
                 return {"ok": True, "report": out}
 
             if cmd == "agent_run_list":
@@ -455,20 +460,38 @@ class RuntimeHost:
                 out = self._agent_run_call("run_dlq", limit=int(limit))
                 return {"ok": True, "dlq": out}
 
+            if cmd == "agent_run_migrate_storage":
+                dry_run = command.get("dry_run", True)
+                if not isinstance(dry_run, bool):
+                    raise InvalidCommand("dry_run must be a boolean")
+                backup_legacy = command.get("backup_legacy", True)
+                if not isinstance(backup_legacy, bool):
+                    raise InvalidCommand("backup_legacy must be a boolean")
+                prune_legacy = command.get("prune_legacy", False)
+                if not isinstance(prune_legacy, bool):
+                    raise InvalidCommand("prune_legacy must be a boolean")
+                force = command.get("force", False)
+                if not isinstance(force, bool):
+                    raise InvalidCommand("force must be a boolean")
+                out = self._agent_run_call(
+                    "run_migrate_storage",
+                    dry_run=bool(dry_run),
+                    backup_legacy=bool(backup_legacy),
+                    prune_legacy=bool(prune_legacy),
+                    force=bool(force),
+                )
+                return {"ok": True, "migration": out}
+
             if cmd == "agent_run_cancel":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
+                run_id = self._normalize_run_id(command.get("run_id"))
                 reason = command.get("reason", "cancel_requested")
                 if not isinstance(reason, str):
                     raise InvalidCommand("reason must be a string")
-                out = self._agent_run_call("run_cancel", run_id=str(run_id).strip(), reason=str(reason).strip())
+                out = self._agent_run_call("run_cancel", run_id=run_id, reason=str(reason).strip())
                 return {"ok": True, "run": out}
 
             if cmd == "agent_run_resume":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
+                run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
                 if not isinstance(ttl, int):
@@ -486,7 +509,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
                 out = self._agent_run_call(
                     "run_resume",
-                    run_id=str(run_id).strip(),
+                    run_id=run_id,
                     policy=policy,
                     ttl_seconds=int(ttl),
                     workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
@@ -496,9 +519,7 @@ class RuntimeHost:
                 return {"ok": True, "run": out}
 
             if cmd == "agent_run_abort":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
+                run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
                 if not isinstance(ttl, int):
@@ -516,7 +537,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
                 out = self._agent_run_call(
                     "run_abort",
-                    run_id=str(run_id).strip(),
+                    run_id=run_id,
                     policy=policy,
                     ttl_seconds=int(ttl),
                     workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
@@ -526,9 +547,7 @@ class RuntimeHost:
                 return {"ok": True, "run": out}
 
             if cmd == "agent_run_approve":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
+                run_id = self._normalize_run_id(command.get("run_id"))
                 stage = command.get("stage")
                 if not isinstance(stage, str) or not stage.strip():
                     raise InvalidCommand("stage must be a non-empty string")
@@ -552,7 +571,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
                 out = self._agent_run_call(
                     "run_approve",
-                    run_id=str(run_id).strip(),
+                    run_id=run_id,
                     stage=str(stage).strip(),
                     token=str(token).strip(),
                     policy=policy,
@@ -564,9 +583,7 @@ class RuntimeHost:
                 return {"ok": True, "run": out}
 
             if cmd == "agent_run_replay":
-                run_id = command.get("run_id")
-                if not isinstance(run_id, str) or not run_id.strip():
-                    raise InvalidCommand("run_id must be a non-empty string")
+                run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
                 if not isinstance(ttl, int):
@@ -587,7 +604,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
                 out = self._agent_run_call(
                     "run_replay",
-                    run_id=str(run_id).strip(),
+                    run_id=run_id,
                     policy=policy,
                     ttl_seconds=int(ttl),
                     workspace_id=(workspace_id.strip() if isinstance(workspace_id, str) else None),
@@ -717,6 +734,21 @@ class RuntimeHost:
         if not isinstance(result, dict):
             raise InvalidCommand(f"{method_name} must return object payload")
         return dict(result)
+
+    @staticmethod
+    def _normalize_run_id(raw: Any) -> str:
+        if not isinstance(raw, str):
+            raise InvalidCommand("run_id must be a non-empty string")
+        run_id = raw.strip()
+        if not run_id:
+            raise InvalidCommand("run_id must be a non-empty string")
+        if len(run_id) > _RUN_ID_MAX_LEN:
+            raise InvalidCommand(f"run_id must be <= {_RUN_ID_MAX_LEN} chars")
+        if ".." in run_id:
+            raise InvalidCommand("run_id has invalid format")
+        if _RUN_ID_PATTERN.fullmatch(run_id) is None:
+            raise InvalidCommand("run_id has invalid format")
+        return run_id
 
     def _policy_config_for_profile(self, profile: str) -> dict[str, Any]:
         provider = getattr(self._service, "policy_config_for_profile", None)

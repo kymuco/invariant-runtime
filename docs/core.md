@@ -94,8 +94,8 @@ API:
 
 ## Out of core scope
 
-- Agent Factory boot assembly: `apps/agent_factory/boot.py`
-- Agent Factory CLI: `apps/agent_factory/cli/invariant_agent_cli.py`
+- Agent Factory boot assembly: `apps/agent_factory/bootstrap/service_factory.py`
+- Agent Factory CLI: `apps/agent_factory/cli/main.py`
 - Domain plugin packs: `plugin_packs/**`
 
 These parts evolve faster than core and should not force core-level breaking changes without clear reason.
