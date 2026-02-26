@@ -158,6 +158,12 @@ def _plugin_stdout_to_stderr():
 
     # 1) Python-level redirect (covers print(), logging to sys.stdout, etc.)
     with contextlib.redirect_stdout(sys.stderr):
+        if _PROTO_OUT_FD is not None:
+            # Строгий режим УЖЕ включен глобально в main(). 
+            # Не тратим время на системные вызовы.
+            yield
+            return
+
         # 2) OS-level redirect (covers C extensions writing to fd=1)
         saved_fd: int | None = None
         try:
@@ -239,7 +245,7 @@ class Worker:
 
         # Make plugin_root importable (plugin packages)
         if str(plugin_root) not in sys.path:
-            sys.path.insert(0, str(plugin_root))
+            sys.path.append(str(plugin_root)) # Безопаснее: стандартные модули грузятся первыми
         _wlog(f"op_load: sys.path[0]={sys.path[0]}")
 
         if file_s:
@@ -382,7 +388,11 @@ def main() -> int:
             elif op == "shutdown":
                 res = w.op_shutdown()
                 _write({"id": mid, **res})
-                return 0
+                
+                # Гарантированный выход, игнорируя зависшие non-daemon потоки плагина
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(0) # Жесткий системный выход (не вызывает обработчики atexit и не ждет потоки)
             else:
                 raise ValueError(f"Unknown op: {op!r}")
 

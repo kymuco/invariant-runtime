@@ -30,7 +30,9 @@ _REQUEST_POOL = cf.ThreadPoolExecutor(
 
 class _WorkerClient:
     def __init__(self, *, python_exe: Path, plugin_root: Path, name: str) -> None:
-        self._lock = threading.Lock()
+        # ЗАМЕНА: self._lock = threading.Lock() на специализированный лок:
+        self._write_lock = threading.Lock() # Защищает только p.stdin.write
+        self._state_lock = threading.Lock() # Защищает флаг _closed
         self._name = name
         self._cv = threading.Condition()
         self._responses: dict[str, dict[str, Any]] = {}
@@ -44,12 +46,47 @@ class _WorkerClient:
     def _spawn(self, *, python_exe: Path, plugin_root: Path) -> subprocess.Popen:
         # need invariant importable for "-m invariant.ops.plugin_worker"
         core_root = Path(invariant.__file__).resolve().parents[1]  # .../invariant -> project root-ish
-        env = dict(os.environ)
+
+        # Hardened env: собираем с нуля, прокидываем только нужное.
+        # Это снижает риск утечки секретов/нестабильного поведения из parent process env.
+        safe_keys = {
+            # Базовые системные переменные (кроссплатформенно)
+            "PATH",
+            "SystemRoot", "WINDIR",          # Windows
+            "HOME", "USERPROFILE",           # Unix / Windows
+            "TMP", "TEMP", "TMPDIR",         # temp dirs
+
+            # Locale (иногда влияет на кодировки/поведение библиотек)
+            "LANG", "LC_ALL", "LC_CTYPE",
+
+            # SSL / CA bundles (если плагины/воркер ходят в сеть)
+            "SSL_CERT_FILE", "SSL_CERT_DIR",
+            "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+
+            # Proxy (если окружение требует)
+            "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+            "http_proxy", "https_proxy", "no_proxy",
+
+            # Native library paths (аккуратно: могут понадобиться C-расширениям)
+            "LD_LIBRARY_PATH",               # Linux
+            "DYLD_LIBRARY_PATH",             # macOS (если применимо)
+
+            # Ваши debug-флаги (если хотите сохранять их поведение)
+            "INVARIANT_WORKER_DEBUG",
+            "INVARIANT_WORKER_FAULTHANDLER",
+        }
+
+        env = {k: os.environ[k] for k in safe_keys if k in os.environ}
+
+        # Force stable stdio behavior for JSON-over-pipes IPC.
+        # (ставим ЖЁСТКО, а не setdefault)
         env["PYTHONUNBUFFERED"] = "1"
-        # Force UTF-8 stdio for robust cross-platform JSON protocol.
-        env.setdefault("PYTHONUTF8", "1")
-        env.setdefault("PYTHONIOENCODING", "utf-8")
-        env["PYTHONPATH"] = os.pathsep.join([str(core_root), str(plugin_root), env.get("PYTHONPATH", "")])
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+
+        # Не наследуем parent PYTHONPATH по умолчанию (детерминизм > удобство).
+        # Если понадобится совместимость — можно добавить os.environ.get("PYTHONPATH") третьим элементом.
+        env["PYTHONPATH"] = os.pathsep.join([str(core_root), str(plugin_root)])
 
         creationflags = 0
         if os.name == "nt":
@@ -65,6 +102,9 @@ class _WorkerClient:
             dbg,
             fh,
         )
+        # Optional (без значений, чтобы не светить секреты): логировать только список ключей
+        # log.debug("worker env keys: %s", sorted(env.keys()))
+
         # Binary pipes to avoid TextIO buffering delays on Windows.
         p = subprocess.Popen(
             [str(python_exe), "-m", "invariant.ops.plugin_worker"],
@@ -100,7 +140,7 @@ class _WorkerClient:
                     return
 
                 buf = b""
-                max_buf = 2 * 1024 * 1024  # 2MB safety cap for long lines
+                max_buf = 50 * 1024 * 1024  # 50MB хватит для любого JSON от LLM
                 while True:
                     chunk = raw.read(4096)
                     if not chunk:
@@ -114,10 +154,10 @@ class _WorkerClient:
 
                     # If buffer grows without newlines, keep it bounded (avoid unbounded memory)
                     if len(buf) > max_buf:
-                        s = buf.decode("utf-8", errors="replace")
-                        self._stderr_tail.append(s)
-                        _emit(s)
-                        buf = b""
+                        log.error(f"FATAL: worker {self._name} stdout line exceeded {max_buf} bytes!")
+                        # Лучше уронить воркер явно, чем тихо давиться битым JSON
+                        self._proc.kill() 
+                        break
 
                 if buf:
                     s = buf.decode("utf-8", errors="replace")
@@ -206,27 +246,29 @@ class _WorkerClient:
         return f"\n--- worker exited ---\nreturncode={code}"
 
     def request(self, msg: dict[str, Any], *, timeout_s: float | None = 30.0) -> dict[str, Any]:
-        with self._lock:
+        req_id = msg.get("id")
+        if not req_id:
+            raise ValueError("worker request requires 'id'")
+        req_id = str(req_id)
+
+        # 1. Готовим данные ДО захвата любых блокировок (экономим процессорное время в крит. секции)
+        t0 = time.monotonic()
+        payload = json.dumps(msg, ensure_ascii=False) + "\n"
+        data = payload.encode("utf-8", errors="replace")
+        log.info("worker send op=%s id=%s bytes=%s", msg.get("op"), req_id, len(data))
+
+        # 2. Блокируем ТОЛЬКО запись в stdin. 
+        # Если 5 потоков вызовут request одновременно, они аккуратно выстроятся в очередь здесь.
+        with self._write_lock:
             p = self._proc
             if p.poll() is not None:
                 raise RuntimeError(
                     "worker process is not running"
-                    + self._dead_hint()
-                    + self._stderr_hint()
-                    + self._stdout_hint()
+                    + self._dead_hint() + self._stderr_hint() + self._stdout_hint()
                 )
 
             assert p.stdin is not None
-
-            req_id = msg.get("id")
-            if not req_id:
-                raise ValueError("worker request requires 'id'")
-            req_id = str(req_id)
-
-            t0 = time.monotonic()
-            payload = json.dumps(msg, ensure_ascii=False) + "\n"
-            data = payload.encode("utf-8", errors="replace")
-            log.info("worker send op=%s id=%s bytes=%s", msg.get("op"), req_id, len(data))
+            
             try:
                 p.stdin.write(data)
                 p.stdin.flush()
@@ -234,56 +276,62 @@ class _WorkerClient:
                 log.exception("worker send failed op=%s id=%s err=%s", msg.get("op"), req_id, e)
                 raise
 
-            deadline: float | None = None
-            if timeout_s is not None:
-                try:
-                    tv = float(timeout_s)
-                except Exception:
-                    tv = 0.0
-                if tv > 0.0:
-                    deadline = time.monotonic() + tv
+        # 3. Вычисляем дедлайн для Condition Variable
+        deadline: float | None = None
+        if timeout_s is not None:
+            try:
+                tv = float(timeout_s)
+            except Exception:
+                tv = 0.0
+            if tv > 0.0:
+                deadline = time.monotonic() + tv
 
-            # Wait for a response with matching id (delivered by stdout drain thread)
-            with self._cv:
-                while True:
-                    if p.poll() is not None:
+        # 4. ОЖИДАНИЕ ОТВЕТА (Без блокировки других запросов!)
+        # self._cv работает независимо от _write_lock. Другие потоки могут писать в stdin, пока мы спим здесь.
+        with self._cv:
+            while True:
+                if p.poll() is not None:
+                    raise RuntimeError(
+                        "worker exited while waiting for response"
+                        + self._dead_hint() + self._stderr_hint() + self._stdout_hint()
+                    )
+
+                # Проверяем, не пришел ли НАШ ответ (положил поток чтения stdout)
+                resp = self._responses.pop(req_id, None)
+                if resp is not None:
+                    dt_ms = int((time.monotonic() - t0) * 1000)
+                    if dt_ms >= 1000:
+                        log.info("worker response op=%s id=%s dt_ms=%s", msg.get("op"), req_id, dt_ms)
+                    return resp
+
+                # Проверка таймаута
+                if deadline is not None:
+                    now = time.monotonic()
+                    if now > deadline:
                         raise RuntimeError(
-                            "worker exited while waiting for response"
-                            + self._dead_hint()
-                            + self._stderr_hint()
-                            + self._stdout_hint()
+                            f"worker request timeout (id={req_id}, op={msg.get('op')!r})"
+                            + self._stderr_hint() + self._stdout_hint()
                         )
-
-                    resp = self._responses.pop(req_id, None)
-                    if resp is not None:
-                        dt_ms = int((time.monotonic() - t0) * 1000)
-                        if dt_ms >= 1000:
-                            log.info("worker response op=%s id=%s dt_ms=%s", msg.get("op"), req_id, dt_ms)
-                        return resp
-
-                    if deadline is not None:
-                        now = time.monotonic()
-                        if now > deadline:
-                            raise RuntimeError(
-                                f"worker request timeout (id={req_id}, op={msg.get('op')!r})"
-                                + self._stderr_hint()
-                                + self._stdout_hint()
-                            )
-                        self._cv.wait(timeout=min(0.1, max(0.0, deadline - now)))
-                    else:
-                        self._cv.wait(timeout=0.1)
+                    # Спим не более 0.1 сек, чтобы быстро реагировать на смерть процесса
+                    self._cv.wait(timeout=min(0.1, max(0.0, deadline - now)))
+                else:
+                    self._cv.wait(timeout=0.1)
 
     def close(self, *, graceful: bool = True) -> None:
         # Avoid deadlock: do not call request() while holding the same lock.
-        with self._lock:
+        # Проверяем и меняем стейт безопасно
+        with self._state_lock:
             if self._closed:
                 return
             self._closed = True
-            p = self._proc
-            if p.poll() is not None:
-                return
+
+        p = self._proc
+        if p.poll() is not None:
+            return
 
         # Ask nicely (outside lock to avoid re-entrancy).
+        # graceful запрос пойдет через стандартный request, 
+        # который теперь безопасно возьмет _write_lock
         if graceful:
             try:
                 self.request({"op": "shutdown", "id": str(uuid.uuid4())}, timeout_s=0.2)
@@ -291,6 +339,7 @@ class _WorkerClient:
                 pass
 
         # Then terminate, then kill if needed.
+        # Жесткое убийство
         try:
             p.terminate()
         except Exception:
