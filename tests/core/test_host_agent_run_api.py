@@ -176,13 +176,13 @@ def _host(service: FakePluginService, *, policy_profile: str | None = None) -> R
     return RuntimeHost(plugin_service=service, enable_watchdog=False, policy_profile=policy_profile)
 
 
-def test_agent_run_submit_routes_and_parses_payload():
+def test_run_submit_routes_and_parses_payload():
     service = _RunApiService()
     host = _host(service)
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "safe_fix",
                 "inputs": {"goal": "lint"},
                 "policy": "managed",
@@ -218,13 +218,13 @@ def test_agent_run_submit_routes_and_parses_payload():
         host.close()
 
 
-def test_agent_run_submit_forwards_host_policy_profile():
+def test_run_submit_forwards_host_policy_profile():
     service = _RunApiService()
     host = _host(service, policy_profile="stage")
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "safe_fix",
                 "inputs": {"goal": "lint stage"},
                 "policy": "ephemeral",
@@ -238,13 +238,13 @@ def test_agent_run_submit_forwards_host_policy_profile():
         host.close()
 
 
-def test_agent_run_submit_forwards_experimental_opt_in():
+def test_run_submit_forwards_experimental_opt_in():
     service = _RunApiService()
     host = _host(service)
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "coding_agent_llm_multi_patch",
                 "inputs": {"goal": "experimental"},
                 "experimental": True,
@@ -373,13 +373,13 @@ def test_agent_run_other_commands_route_to_service_methods():
         host.close()
 
 
-def test_agent_run_submit_rejects_workspace_id_with_workspace_path():
+def test_run_submit_rejects_workspace_id_with_workspace_path():
     service = _RunApiService()
     host = _host(service)
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "safe_fix",
                 "workspace_id": "ws-1",
                 "workspace_path": "C:/tmp/workspace",
@@ -391,13 +391,13 @@ def test_agent_run_submit_rejects_workspace_id_with_workspace_path():
         host.close()
 
 
-def test_agent_run_submit_reports_invalid_policy():
+def test_run_submit_reports_invalid_policy():
     service = _RunApiService()
     host = _host(service)
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "safe_fix",
                 "policy": "unknown-policy",
             }
@@ -408,13 +408,13 @@ def test_agent_run_submit_reports_invalid_policy():
         host.close()
 
 
-def test_agent_run_submit_rejects_non_boolean_experimental():
+def test_run_submit_rejects_non_boolean_experimental():
     service = _RunApiService()
     host = _host(service)
     try:
         out = host.handle(
             {
-                "cmd": "agent_run_submit",
+                "cmd": "run_submit",
                 "pipeline": "safe_fix",
                 "experimental": "yes",
             }

@@ -10,7 +10,7 @@
 - execution/managed/workspace flows,
 - ops infrastructure (host/supervisor/daemon/tracing/metrics).
 
-Core must stay product-agnostic. Agent-specific workflows belong to `apps/agent_factory/`.
+Core must stay product-agnostic. Agent-specific workflows belong to `apps/run_factory/`.
 
 ## Boundaries
 
@@ -18,12 +18,12 @@ Core must stay product-agnostic. Agent-specific workflows belong to `apps/agent_
   reusable runtime and API contracts.
 - `plugin_packs/`:
   plugin manifests and implementations (domain extensions).
-- `apps/agent_factory/`:
+- `apps/run_factory/`:
   product assembly (boot + CLI + presets/policies).
 
 Rule of thumb:
 If logic is reusable across any plugin-based product, keep it in `invariant/`.
-If logic is specific to Agent Factory workflow, keep it in `apps/agent_factory/`.
+If logic is specific to Agent Factory workflow, keep it in `apps/run_factory/`.
 
 ## Core package map
 
@@ -94,8 +94,8 @@ API:
 
 ## Out of core scope
 
-- Agent Factory boot assembly: `apps/agent_factory/bootstrap/service_factory.py`
-- Agent Factory CLI: `apps/agent_factory/cli/main.py`
+- Agent Factory boot assembly: `apps/run_factory/bootstrap/service_factory.py`
+- Agent Factory CLI: `apps/run_factory/cli/main.py`
 - Domain plugin packs: `plugin_packs/**`
 
 These parts evolve faster than core and should not force core-level breaking changes without clear reason.

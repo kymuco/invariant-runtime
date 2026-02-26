@@ -280,7 +280,7 @@ class RuntimeHost:
                 return {"ok": True, **info}
 
             # ---- app-level Agent Factory run API ----
-            if cmd == "agent_run_submit":
+            if cmd == "run_submit":
                 pipeline = command.get("pipeline")
                 if not isinstance(pipeline, str) or not pipeline.strip():
                     raise InvalidCommand("pipeline must be a non-empty string")

@@ -956,30 +956,30 @@ def _resolve_agent_run_alerting_config(*, service: Any, policy_profile: str | No
         except Exception:
             log.exception("Failed to load alerting policy config profile=%s", profile)
 
-    enabled = _coerce_bool(raw_cfg.get("agent_factory.alerts.enabled"), default=False)
-    webhook_url = str(raw_cfg.get("agent_factory.alerts.webhook_url") or "").strip()
-    timeout_s = _coerce_float(raw_cfg.get("agent_factory.alerts.timeout_s"), default=5.0, minimum=0.1)
-    cooldown_s = _coerce_int(raw_cfg.get("agent_factory.alerts.cooldown_s"), default=300, minimum=0)
-    poll_interval_s = _coerce_float(raw_cfg.get("agent_factory.alerts.poll_interval_s"), default=30.0, minimum=1.0)
-    scan_limit = _coerce_int(raw_cfg.get("agent_factory.alerts.scan_limit"), default=1000, minimum=1)
-    fail_spike_window = _coerce_int(raw_cfg.get("agent_factory.alerts.fail_spike_window"), default=20, minimum=1)
+    enabled = _coerce_bool(raw_cfg.get("run_factory.alerts.enabled"), default=False)
+    webhook_url = str(raw_cfg.get("run_factory.alerts.webhook_url") or "").strip()
+    timeout_s = _coerce_float(raw_cfg.get("run_factory.alerts.timeout_s"), default=5.0, minimum=0.1)
+    cooldown_s = _coerce_int(raw_cfg.get("run_factory.alerts.cooldown_s"), default=300, minimum=0)
+    poll_interval_s = _coerce_float(raw_cfg.get("run_factory.alerts.poll_interval_s"), default=30.0, minimum=1.0)
+    scan_limit = _coerce_int(raw_cfg.get("run_factory.alerts.scan_limit"), default=1000, minimum=1)
+    fail_spike_window = _coerce_int(raw_cfg.get("run_factory.alerts.fail_spike_window"), default=20, minimum=1)
     fail_spike_threshold_pct = _coerce_float(
-        raw_cfg.get("agent_factory.alerts.fail_spike_threshold_pct"),
+        raw_cfg.get("run_factory.alerts.fail_spike_threshold_pct"),
         default=40.0,
         minimum=0.0,
     )
-    stuck_run_seconds = _coerce_int(raw_cfg.get("agent_factory.alerts.stuck_run_seconds"), default=1800, minimum=1)
-    replay_target_pct = _coerce_float(raw_cfg.get("agent_factory.alerts.replay_target_pct"), default=95.0, minimum=0.0)
-    trace_target_pct = _coerce_float(raw_cfg.get("agent_factory.alerts.trace_target_pct"), default=100.0, minimum=0.0)
+    stuck_run_seconds = _coerce_int(raw_cfg.get("run_factory.alerts.stuck_run_seconds"), default=1800, minimum=1)
+    replay_target_pct = _coerce_float(raw_cfg.get("run_factory.alerts.replay_target_pct"), default=95.0, minimum=0.0)
+    trace_target_pct = _coerce_float(raw_cfg.get("run_factory.alerts.trace_target_pct"), default=100.0, minimum=0.0)
 
-    state_path_raw = str(raw_cfg.get("agent_factory.alerts.state_path") or "").strip()
+    state_path_raw = str(raw_cfg.get("run_factory.alerts.state_path") or "").strip()
     if not state_path_raw:
-        state_path_raw = ".invariant/run_registry/agent_factory/alerts_state.json"
+        state_path_raw = ".invariant/run_registry/run_factory/alerts_state.json"
     state_path = Path(state_path_raw)
     if not state_path.is_absolute():
         state_path = state_path.resolve()
 
-    secret_env_name = str(raw_cfg.get("agent_factory.alerts.webhook_hmac_secret_env") or "").strip()
+    secret_env_name = str(raw_cfg.get("run_factory.alerts.webhook_hmac_secret_env") or "").strip()
     hmac_secret: str | None = None
     if secret_env_name:
         hmac_secret = str(os.environ.get(secret_env_name, "")).strip() or None
@@ -1015,16 +1015,16 @@ def _resolve_agent_run_replay_sampler_config(*, service: Any, policy_profile: st
         except Exception:
             log.exception("Failed to load replay sampler policy config profile=%s", profile)
 
-    enabled = _coerce_bool(raw_cfg.get("agent_factory.replay_sampler.enabled"), default=False)
-    poll_interval_s = _coerce_float(raw_cfg.get("agent_factory.replay_sampler.poll_interval_s"), default=60.0, minimum=1.0)
-    scan_limit = _coerce_int(raw_cfg.get("agent_factory.replay_sampler.scan_limit"), default=200, minimum=1)
-    max_runs = _coerce_int(raw_cfg.get("agent_factory.replay_sampler.max_runs"), default=20, minimum=1)
-    cooldown_s = _coerce_float(raw_cfg.get("agent_factory.replay_sampler.cooldown_seconds"), default=900.0, minimum=0.0)
-    strict = _coerce_bool(raw_cfg.get("agent_factory.replay_sampler.strict"), default=True)
-    policy = str(raw_cfg.get("agent_factory.replay_sampler.policy") or "ephemeral").strip().lower()
+    enabled = _coerce_bool(raw_cfg.get("run_factory.replay_sampler.enabled"), default=False)
+    poll_interval_s = _coerce_float(raw_cfg.get("run_factory.replay_sampler.poll_interval_s"), default=60.0, minimum=1.0)
+    scan_limit = _coerce_int(raw_cfg.get("run_factory.replay_sampler.scan_limit"), default=200, minimum=1)
+    max_runs = _coerce_int(raw_cfg.get("run_factory.replay_sampler.max_runs"), default=20, minimum=1)
+    cooldown_s = _coerce_float(raw_cfg.get("run_factory.replay_sampler.cooldown_seconds"), default=900.0, minimum=0.0)
+    strict = _coerce_bool(raw_cfg.get("run_factory.replay_sampler.strict"), default=True)
+    policy = str(raw_cfg.get("run_factory.replay_sampler.policy") or "ephemeral").strip().lower()
     if policy not in {"ephemeral", "managed"}:
         policy = "ephemeral"
-    ttl_seconds = _coerce_int(raw_cfg.get("agent_factory.replay_sampler.ttl_seconds"), default=1200, minimum=1)
+    ttl_seconds = _coerce_int(raw_cfg.get("run_factory.replay_sampler.ttl_seconds"), default=1200, minimum=1)
 
     return {
         "profile": profile,
@@ -1236,7 +1236,7 @@ def _agent_run_alert_loop(
     stuck_run_seconds = _coerce_int(cfg.get("stuck_run_seconds"), default=1800, minimum=1)
     replay_target_pct = _coerce_float(cfg.get("replay_target_pct"), default=95.0, minimum=0.0)
     trace_target_pct = _coerce_float(cfg.get("trace_target_pct"), default=100.0, minimum=0.0)
-    state_path = Path(str(cfg.get("state_path") or ".invariant/run_registry/agent_factory/alerts_state.json")).resolve()
+    state_path = Path(str(cfg.get("state_path") or ".invariant/run_registry/run_factory/alerts_state.json")).resolve()
     hmac_secret = str(cfg.get("hmac_secret") or "").strip() or None
     profile = str(cfg.get("profile") or "")
     cycles = 0
@@ -1334,7 +1334,7 @@ def _agent_run_alert_loop(
                     continue
 
                 payload = {
-                    "source": "invariant.agent_factory.alert",
+                    "source": "invariant.run_factory.alert",
                     "ts_unix": now,
                     "profile": profile or None,
                     "alert_id": alert_id,

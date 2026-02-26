@@ -28,15 +28,15 @@ from tests.fake_service import FakePluginService
 
 _SUITE_PATHS: dict[str, tuple[str, ...]] = {
     "core": ("tests/core/",),
-    "agent_factory": ("tests/agent_factory/", "tests/e2e/"),
+    "run_factory": ("tests/run_factory/", "tests/e2e/"),
     "e2e": ("tests/e2e/",),
     "plugin_packs": (
         "tests/plugin_packs_core/",
-        "tests/plugin_packs_agent_factory/",
+        "tests/plugin_packs_run_factory/",
         "tests/plugin_packs_research/",
     ),
     "plugin_packs_core": ("tests/plugin_packs_core/",),
-    "plugin_packs_agent_factory": ("tests/plugin_packs_agent_factory/",),
+    "plugin_packs_run_factory": ("tests/plugin_packs_run_factory/",),
     "plugin_packs_research": ("tests/plugin_packs_research/",),
 }
 
@@ -47,8 +47,8 @@ def pytest_addoption(parser):
         action="store",
         default="all",
         help=(
-            "Logical suite selector: all, core, agent_factory, e2e, plugin_packs, "
-            "plugin_packs_core, plugin_packs_agent_factory, plugin_packs_research."
+            "Logical suite selector: all, core, run_factory, e2e, plugin_packs, "
+            "plugin_packs_core, plugin_packs_run_factory, plugin_packs_research."
         ),
     )
 
