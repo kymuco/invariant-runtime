@@ -23,7 +23,7 @@ class _RunApiService(FakePluginService):
 
     def run_status(self, *, run_id: str) -> dict[str, Any]:
         self.calls.append(("run_status", {"run_id": run_id}))
-        return {"run_id": run_id, "state": "running", "pipeline": "safe_fix"}
+        return {"run_id": run_id, "state": "running", "pipeline": "safe_patch_apply"}
 
     def run_report(self, *, run_id: str) -> dict[str, Any]:
         self.calls.append(("run_report", {"run_id": run_id}))
@@ -153,7 +153,7 @@ class _RunApiService(FakePluginService):
             "strict": bool(kwargs.get("strict", True)),
             "passed": True,
             "replay": {"passed": True, "failed_checks": []},
-            "run": {"run_id": run_id, "state": "succeeded", "pipeline": "safe_fix"},
+            "run": {"run_id": run_id, "state": "succeeded", "pipeline": "safe_patch_apply"},
         }
 
     def run_replay_batch(self, **kwargs: Any) -> dict[str, Any]:
@@ -183,7 +183,7 @@ def test_run_submit_routes_and_parses_payload():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "safe_fix",
+                "pipeline": "safe_patch_apply",
                 "inputs": {"goal": "lint"},
                 "policy": "managed",
                 "ttl_seconds": 1800,
@@ -203,7 +203,7 @@ def test_run_submit_routes_and_parses_payload():
         assert out["run"]["run_id"] == "af-run-1"
         method, payload = service.calls[-1]
         assert method == "run_submit"
-        assert payload["pipeline"] == "safe_fix"
+        assert payload["pipeline"] == "safe_patch_apply"
         assert payload["inputs"] == {"goal": "lint"}
         assert payload["idempotency_key"] == "idem-1"
         assert payload["ttl_seconds"] == 1800
@@ -225,7 +225,7 @@ def test_run_submit_forwards_host_policy_profile():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "safe_fix",
+                "pipeline": "safe_patch_apply",
                 "inputs": {"goal": "lint stage"},
                 "policy": "ephemeral",
             }
@@ -245,7 +245,7 @@ def test_run_submit_forwards_experimental_opt_in():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "coding_agent_llm_multi_patch",
+                "pipeline": "constrained_feature_impl_beta",
                 "inputs": {"goal": "experimental"},
                 "experimental": True,
             }
@@ -380,7 +380,7 @@ def test_run_submit_rejects_workspace_id_with_workspace_path():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "safe_fix",
+                "pipeline": "safe_patch_apply",
                 "workspace_id": "ws-1",
                 "workspace_path": "C:/tmp/workspace",
             }
@@ -398,7 +398,7 @@ def test_run_submit_reports_invalid_policy():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "safe_fix",
+                "pipeline": "safe_patch_apply",
                 "policy": "unknown-policy",
             }
         )
@@ -415,7 +415,7 @@ def test_run_submit_rejects_non_boolean_experimental():
         out = host.handle(
             {
                 "cmd": "run_submit",
-                "pipeline": "safe_fix",
+                "pipeline": "safe_patch_apply",
                 "experimental": "yes",
             }
         )
