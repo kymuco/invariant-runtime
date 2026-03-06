@@ -1,6 +1,10 @@
 ﻿from __future__ import annotations
+from __future__ import annotations
 
 import concurrent.futures
+import socket
+import threading
+import time
 
 import pytest
 
@@ -9,6 +13,57 @@ from tests.helpers_http import http_json, http_json_expect_continue_raw
 
 def _base_cmd_create(ttl: int = 10):
     return {"cmd": "create_execution", "policy": "ephemeral", "ttl_seconds": ttl}
+
+
+def _start_daemon_for_shutdown_auth(
+    *,
+    runtime_host: object,
+    api_token: str | None,
+    admin_token: str | None,
+):
+    from invariant.ops.daemon import InvariantHTTPServer, JsonAPIHandler
+
+    server = InvariantHTTPServer(
+        ("127.0.0.1", 0),
+        JsonAPIHandler,
+        runtime_host=runtime_host,
+        api_token=api_token,
+        admin_token=admin_token,
+        max_body_bytes=1024 * 1024,
+        log_request_bodies=False,
+        max_concurrent_requests=8,
+        acquire_timeout_s=0.05,
+        retry_after_s=1,
+    )
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    thread.start()
+
+    host, port = server.server_address
+    deadline = time.time() + 2.0
+    last_err = None
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.2):
+                last_err = None
+                break
+        except OSError as e:
+            last_err = e
+            time.sleep(0.02)
+    if last_err is not None:
+        raise RuntimeError(f"Server did not start listening in time: {last_err}") from last_err
+    return server, thread
+
+
+def _stop_daemon_server(server: object, thread: threading.Thread) -> None:
+    try:
+        getattr(server, "shutdown")()
+    except Exception:
+        pass
+    try:
+        getattr(server, "server_close")()
+    except Exception:
+        pass
+    thread.join(timeout=2)
 
 
 def test_http_health_smoke(daemon_server):
@@ -74,6 +129,57 @@ def test_http_shutdown_requires_token(daemon_server):
     assert r2.json()["ok"] is True
 
 
+def test_http_shutdown_allows_without_token_when_no_auth_tokens(runtime_host):
+    server, thread = _start_daemon_for_shutdown_auth(
+        runtime_host=runtime_host,
+        api_token=None,
+        admin_token=None,
+    )
+    host, port = server.server_address
+    try:
+        r = http_json(host, port, "POST", "/v1/shutdown", {})
+        assert r.status == 200, r.body
+        assert r.json()["ok"] is True
+    finally:
+        _stop_daemon_server(server, thread)
+
+
+def test_http_shutdown_requires_api_token_when_admin_not_configured(runtime_host):
+    server, thread = _start_daemon_for_shutdown_auth(
+        runtime_host=runtime_host,
+        api_token="api-secret",
+        admin_token=None,
+    )
+    host, port = server.server_address
+    try:
+        r = http_json(host, port, "POST", "/v1/shutdown", {})
+        assert r.status == 403, r.body
+        r2 = http_json(host, port, "POST", "/v1/shutdown", {}, headers={"Authorization": "Bearer wrong"})
+        assert r2.status == 403, r2.body
+        r3 = http_json(host, port, "POST", "/v1/shutdown", {}, headers={"Authorization": "Bearer api-secret"})
+        assert r3.status == 200, r3.body
+        assert r3.json()["ok"] is True
+    finally:
+        _stop_daemon_server(server, thread)
+
+
+def test_http_shutdown_prefers_admin_token_when_both_tokens_configured(runtime_host):
+    server, thread = _start_daemon_for_shutdown_auth(
+        runtime_host=runtime_host,
+        api_token="api-secret",
+        admin_token="admin-secret",
+    )
+    host, port = server.server_address
+    try:
+        r = http_json(host, port, "POST", "/v1/shutdown", {}, headers={"Authorization": "Bearer api-secret"})
+        assert r.status == 403, r.body
+        r2 = http_json(host, port, "POST", "/v1/shutdown", {}, headers={"Authorization": "Bearer admin-secret"})
+        assert r2.status == 200, r2.body
+        assert r2.json()["ok"] is True
+    finally:
+        _stop_daemon_server(server, thread)
+
+
 @pytest.mark.stress
 def test_http_busy_rejection_under_load(daemon_server):
     """
@@ -122,4 +228,5 @@ def test_http_busy_rejection_under_load(daemon_server):
     j0 = busy[0].json()
     assert j0["ok"] is False and j0["error"] == "busy"
     assert "request_id" in j0
+
 

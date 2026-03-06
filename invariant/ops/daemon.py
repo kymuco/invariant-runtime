@@ -756,15 +756,20 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/v1/shutdown":
-            # If admin_token is not configured, endpoint is disabled.
-            if not getattr(self.server, "admin_token", None):
+            # Auth policy:
+            # 1) admin_token configured -> require admin token
+            # 2) no admin_token but api_token configured -> require api token
+            # 3) no tokens configured -> allow local shutdown
+            has_admin = bool(getattr(self.server, "admin_token", None))
+            has_api = bool(getattr(self.server, "api_token", None))
+            if has_admin and (not self._require_admin()):
                 self._send_json(
-                    404,
-                    {"ok": False, "error": "not_found", "message": self.path},
+                    403,
+                    {"ok": False, "error": "forbidden", "message": "bad admin token"},
                     req_id=req_id,
                 )
                 return
-            if not self._require_admin():
+            if (not has_admin) and has_api and (not self._require_api()):
                 self._send_json(
                     403,
                     {"ok": False, "error": "forbidden", "message": "bad token"},
@@ -1479,8 +1484,10 @@ def run_daemon(
     log.info("Invariant daemon listening on http://%s:%d", bind, port)
     if admin_token:
         log.info("Admin token enabled for /v1/shutdown")
+    elif api_token:
+        log.info("Admin token not set; /v1/shutdown requires API token")
     else:
-        log.info("Admin token NOT set; /v1/shutdown is disabled")
+        log.info("Admin token not set; /v1/shutdown enabled without auth token")
 
     if bool(run_worker_enabled):
         worker_thread = threading.Thread(
