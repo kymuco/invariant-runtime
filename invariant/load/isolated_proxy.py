@@ -15,6 +15,7 @@ from typing import Any
 
 import invariant  # noqa: F401
 from invariant.load.env.env_manager import EnvManager
+from invariant.load.rpc_codec import assert_rpc_json_serializable, decode_rpc_value
 from invariant.spec.deps import PluginDepsSpec
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
@@ -535,9 +536,8 @@ class IsolatedPluginProxy(BasePlugin):
                 self._env_manager.touch_env(self._env_dir)
         except Exception:
             pass
-        # Fail-fast: transport supports ONLY JSON-serializable payloads.
         try:
-            json.dumps(msg, ensure_ascii=False)
+            encoded_msg = assert_rpc_json_serializable(msg)
         except Exception as e:
             raise TypeError(
                 f"isolated plugin call payload must be JSON-serializable "
@@ -546,7 +546,7 @@ class IsolatedPluginProxy(BasePlugin):
 
         try:
             if timeout_s is not None and timeout_s > 0:
-                fut = _REQUEST_POOL.submit(self._client.request, msg, timeout_s=timeout_s)
+                fut = _REQUEST_POOL.submit(self._client.request, encoded_msg, timeout_s=timeout_s)
                 try:
                     resp = fut.result(timeout=float(timeout_s))
                 except cf.TimeoutError as e:
@@ -556,7 +556,7 @@ class IsolatedPluginProxy(BasePlugin):
                         pass
                     raise RuntimeError(f"isolated plugin call timeout: {method} (timeout_s={timeout_s})") from e
             else:
-                resp = self._client.request(msg, timeout_s=timeout_s)
+                resp = self._client.request(encoded_msg, timeout_s=timeout_s)
         except RuntimeError as e:
             if _is_worker_timeout_error(e):
                 try:
@@ -568,7 +568,7 @@ class IsolatedPluginProxy(BasePlugin):
 
         if not resp.get("ok"):
             raise RuntimeError(_format_worker_error(resp))
-        return resp.get("result")
+        return decode_rpc_value(resp.get("result"))
 
     def call(self, method: str, *args: Any, timeout_s: float | None = None, **kwargs: Any) -> Any:
         """
@@ -584,13 +584,13 @@ class IsolatedPluginProxy(BasePlugin):
         return self._call_impl(method, list(args), dict(kwargs), timeout_s=eff)
 
     def initialize(self, **deps: object) -> None:
-        # Contract: isolated worker boundary accepts ONLY JSON-serializable values.
-        # Object deps (capabilities/plugins/contexts) are not allowed.
+        # Contract: isolated worker boundary accepts ONLY JSON-safe transport payloads.
+        # Object deps (capabilities/plugins/contexts) are still not allowed.
         if deps:
             bad: list[str] = []
             for k, v in deps.items():
                 try:
-                    json.dumps(v, ensure_ascii=False)
+                    assert_rpc_json_serializable(v)
                 except Exception:
                     bad.append(str(k))
             if bad:

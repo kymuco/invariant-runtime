@@ -48,6 +48,25 @@ class PluginManifest:
                 if not isinstance(wd, str) or not wd.strip():
                     raise ValueError("manifest 'deps.wheels_dir' must be non-empty string")
 
+        runtime = self.data.get("runtime")
+        if runtime is not None:
+            if not isinstance(runtime, dict):
+                raise ValueError("manifest 'runtime' must be an object if present")
+            config_param = runtime.get("config_param")
+            config_prefix = runtime.get("config_prefix")
+            if config_param is not None:
+                if not isinstance(config_param, str) or not config_param.strip():
+                    raise ValueError("manifest 'runtime.config_param' must be non-empty string")
+                if not config_param.strip().isidentifier():
+                    raise ValueError("manifest 'runtime.config_param' must be a valid identifier")
+            if config_prefix is not None:
+                if not isinstance(config_prefix, str) or not config_prefix.strip():
+                    raise ValueError("manifest 'runtime.config_prefix' must be non-empty string")
+            if (config_param is not None or config_prefix is not None) and (
+                not isinstance(config_prefix, str) or not config_prefix.strip()
+            ):
+                raise ValueError("manifest 'runtime.config_prefix' is required when runtime config snapshot is enabled")
+
     def to_deps(self) -> PluginDepsSpec:
         self.validate()
         return PluginDepsSpec.from_manifest(self.data.get("deps"))

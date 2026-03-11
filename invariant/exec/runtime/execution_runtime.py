@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Any
 
 from invariant.exec.caps.audit import CapabilityAudit
+from invariant.exec.caps.ids import CAP_CONFIG_SOURCE
 from invariant.exec.caps.policy import CapabilityPolicy, CapabilityPolicyContext
 from invariant.exec.caps.registry import (
     CapabilityNotFound,
@@ -315,6 +316,18 @@ class ExecutionRuntime:
                 )
             dep_instances[spec.param] = instance
 
+        config_param, config_prefix = self._runtime_config_spec(descriptor)
+        if config_param is not None:
+            if config_param in dep_instances:
+                raise RuntimeError(
+                    f"Runtime config injection parameter '{config_param}' collides with dependency param "
+                    f"for plugin {descriptor.meta.id}"
+                )
+            dep_instances[config_param] = self._build_runtime_config_snapshot(
+                plugin_id=descriptor.meta.id,
+                config_prefix=config_prefix,
+            )
+
         plugin = self.kernel.create(
             descriptor=descriptor,
             loader=self.loader,
@@ -354,6 +367,48 @@ class ExecutionRuntime:
             )
 
         return f"{d.meta.id}@{v}"
+
+    @staticmethod
+    def _runtime_config_spec(descriptor) -> tuple[str | None, str | None]:
+        extra = getattr(descriptor.source, "extra", None) or {}
+        config_param = extra.get("config_param")
+        config_prefix = extra.get("config_prefix")
+        if not isinstance(config_param, str) or not config_param.strip():
+            return None, None
+        if not isinstance(config_prefix, str) or not config_prefix.strip():
+            raise RuntimeError(
+                f"Plugin {descriptor.meta.id} declares runtime config injection without a valid config_prefix"
+            )
+        return config_param.strip(), config_prefix.strip()
+
+    def _build_runtime_config_snapshot(self, *, plugin_id: str, config_prefix: str) -> dict[str, Any]:
+        try:
+            config_source = self.capabilities.get(CAP_CONFIG_SOURCE)
+        except (CapabilityNotFound, CapabilityUnavailableError, CapabilityVersionMismatch, ValueError) as exc:
+            raise RuntimeError(
+                f"Plugin {plugin_id} requires runtime config snapshot for prefix {config_prefix!r}, "
+                "but config_source capability is unavailable"
+            ) from exc
+
+        list_keys = getattr(config_source, "list_keys", None)
+        get_value = getattr(config_source, "get", None)
+        if not callable(list_keys) or not callable(get_value):
+            raise RuntimeError(
+                f"Plugin {plugin_id} requires runtime config snapshot, but config_source is invalid"
+            )
+
+        snapshot: dict[str, Any] = {}
+        for key in list_keys(config_prefix):
+            if not isinstance(key, str) or not key.startswith(config_prefix):
+                continue
+            short_key = key[len(config_prefix):].strip()
+            if not short_key:
+                continue
+            try:
+                snapshot[short_key] = get_value(key)
+            except KeyError:
+                continue
+        return snapshot
 
     def _is_ready(self, plugin: BasePlugin) -> bool:
         fsm = getattr(plugin, "fsm", None)

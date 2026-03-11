@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from invariant.load.rpc_codec import decode_rpc_value, encode_rpc_value
+
 _PROTO_STDIN = sys.stdin
 _PROTO_STDOUT = sys.stdout
 
@@ -302,12 +304,14 @@ class Worker:
         if not callable(fn):
             return {"ok": False, "error": f"method not found: {method}"}
 
+        decoded_args = decode_rpc_value(list(args or []))
+        decoded_kwargs = decode_rpc_value(dict(kwargs or {}))
         with _plugin_stdout_to_stderr():
-            out = fn(*list(args or []), **dict(kwargs or {}))
+            out = fn(*list(decoded_args or []), **dict(decoded_kwargs or {}))
 
-        # Ensure result is JSON-serializable; otherwise return a clean error instead of killing protocol.
         try:
-            json.dumps(out, ensure_ascii=False)
+            encoded_out = encode_rpc_value(out)
+            json.dumps(encoded_out, ensure_ascii=False)
         except Exception as e:
             return {
                 "ok": False,
@@ -315,7 +319,7 @@ class Worker:
                 "traceback": traceback.format_exc(),
             }
 
-        return {"ok": True, "result": out}
+        return {"ok": True, "result": encoded_out}
 
     def op_shutdown(self) -> dict[str, Any]:
         if self._plugin is not None:

@@ -114,6 +114,14 @@ class ManifestSource(PluginSource):
     # READ / PARSE
     # ------------------------------------------------------------------
 
+    def _runtime_block_v1(self, data: dict[str, Any], path: Path) -> dict[str, Any]:
+        runtime = data.get("runtime")
+        if runtime is None:
+            return {}
+        if not isinstance(runtime, dict):
+            raise PluginLoadError(f"'runtime' must be an object in {path}")
+        return runtime
+
     def _parse_timeouts_v1(self, data: dict[str, Any], path: Path) -> tuple[float | None, dict[str, float | None]]:
         """
         Parse optional runtime timeouts from manifest.
@@ -125,11 +133,7 @@ class ManifestSource(PluginSource):
           - nested:
               runtime: { call_timeout_s, method_timeouts }
         """
-        runtime = data.get("runtime")
-        if runtime is None:
-            runtime = {}
-        if not isinstance(runtime, dict):
-            raise PluginLoadError(f"'runtime' must be an object in {path}")
+        runtime = self._runtime_block_v1(data, path)
 
         # Nested wins over top-level if both provided
         call_timeout_raw = runtime.get("call_timeout_s", data.get("call_timeout_s"))
@@ -169,6 +173,28 @@ class ManifestSource(PluginSource):
             method_timeouts[k] = fv
         return call_timeout_s, method_timeouts
 
+    def _parse_runtime_config_v1(self, data: dict[str, Any], path: Path) -> tuple[str | None, str | None]:
+        runtime = self._runtime_block_v1(data, path)
+        config_param_raw = runtime.get("config_param")
+        config_prefix_raw = runtime.get("config_prefix")
+
+        if config_param_raw is None and config_prefix_raw is None:
+            return None, None
+
+        if config_param_raw is None:
+            config_param = "config"
+        else:
+            if not isinstance(config_param_raw, str) or not config_param_raw.strip():
+                raise PluginLoadError(f"'runtime.config_param' must be a non-empty string in {path}")
+            config_param = config_param_raw.strip()
+            if not config_param.isidentifier():
+                raise PluginLoadError(f"'runtime.config_param' must be a valid identifier in {path}")
+
+        if not isinstance(config_prefix_raw, str) or not config_prefix_raw.strip():
+            raise PluginLoadError(f"'runtime.config_prefix' must be a non-empty string in {path}")
+        config_prefix = config_prefix_raw.strip()
+        return config_param, config_prefix
+
     def _read_manifest(self, manifest_path: Path, *, dev_mode: bool) -> PluginDescriptor:
         data = self._read_json(manifest_path)
         self._validate_manifest_v1(data, manifest_path)
@@ -195,6 +221,7 @@ class ManifestSource(PluginSource):
         module_name = self._build_module_name(manifest_path, meta)
 
         call_timeout_s, method_timeouts = self._parse_timeouts_v1(data, manifest_path)
+        config_param, config_prefix = self._parse_runtime_config_v1(data, manifest_path)
 
         deps_extra: dict[str, Any] | None = None
         if deps_raw is not None:
@@ -222,6 +249,9 @@ class ManifestSource(PluginSource):
             extra["call_timeout_s"] = call_timeout_s
         if method_timeouts:
             extra["method_timeouts"] = method_timeouts
+        if config_param is not None:
+            extra["config_param"] = config_param
+            extra["config_prefix"] = config_prefix
 
         source = PluginSourceSpec(
             kind=self.kind,
@@ -468,6 +498,12 @@ class ManifestSource(PluginSource):
             raise
         except Exception as e:
             raise PluginLoadError(f"Invalid runtime timeouts in {path}: {e}") from e
+        try:
+            self._parse_runtime_config_v1(data, path)
+        except PluginLoadError:
+            raise
+        except Exception as e:
+            raise PluginLoadError(f"Invalid runtime config snapshot metadata in {path}: {e}") from e
 
         deps = data.get("dependencies", [])
         if deps is None:
