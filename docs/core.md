@@ -1,57 +1,57 @@
-﻿# Core (Current)
+# Core
 
 ## Purpose
 
 `invariant/` is the neutral runtime layer for plugins:
 
-- lifecycle (discover/load/activate/shutdown),
-- dependency resolution,
-- policy-gated capabilities,
-- execution/managed/workspace flows,
-- ops infrastructure (host/supervisor/daemon/tracing/metrics).
+- lifecycle
+- dependency resolution
+- policy-gated capabilities
+- execution and workspace flows
+- ops infrastructure
 
-Core must stay product-agnostic. Agent-specific workflows belong to `apps/run_factory/`.
+Core must stay product-agnostic. Product workflows belong outside the core.
 
 ## Boundaries
 
-- `invariant/`:
-  reusable runtime and API contracts.
-- `plugin_packs/`:
-  plugin manifests and implementations (domain extensions).
-- `apps/run_factory/`:
-  product assembly (boot + CLI + presets/policies).
+- `invariant/`
+  reusable runtime and API contracts
+- `plugin_packs/`
+  plugin manifests and implementations
+- `apps/character_os/`
+  current product assembly
 
 Rule of thumb:
 If logic is reusable across any plugin-based product, keep it in `invariant/`.
-If logic is specific to Agent Factory workflow, keep it in `apps/run_factory/`.
+If logic is specific to Character OS behavior, keep it outside the core.
 
 ## Core package map
 
 - `invariant/spec/`
-  contracts, ids, error model, source metadata.
+  ids, descriptors, manifests, error model
 - `invariant/load/`
-  discovery and loading from configured sources.
+  discovery and source loading
 - `invariant/catalog/`
-  descriptor/version registry (`PluginRegistry`).
+  descriptor and version registry
 - `invariant/exec/`
-  dependency graph, lifecycle kernel, activation transaction, capability wiring.
+  runtime activation, dependency wiring, capabilities
 - `invariant/api/`
-  `PluginService`, policy primitives, profile helpers.
+  `PluginService`, policy primitives, profile helpers
 - `invariant/ops/`
-  daemon/host/supervisor, worker protocol, tracing/metrics, watchdog.
+  daemon, host, supervisor, tracing, metrics
 
 ## Execution lifecycle
 
-1. `PluginLoader.discover(...)` builds `PluginDescriptor` list.
+1. `PluginLoader.discover(...)` builds descriptors.
 2. `PluginRegistry.register(...)` stores descriptors.
-3. `DependencyResolver` builds dependency graph.
-4. `ExecutionRuntime` activates plugins in transaction.
-5. `PluginService.execution(...)` / `PluginService.workspace(...)` provides scoped context.
-6. Commit/Rollback/Shutdown closes runtime consistently.
+3. `DependencyResolver` builds the dependency graph.
+4. `ExecutionRuntime` activates plugins transactionally.
+5. `PluginService.execution(...)` or `PluginService.workspace(...)` provides scoped access.
+6. Commit, rollback, and shutdown close runtime consistently.
 
 ## Capabilities and security model
 
-Capabilities are policy/API boundaries, not a full sandbox boundary.
+Capabilities are policy and API boundaries, not a full sandbox boundary.
 
 Common capability IDs:
 
@@ -59,19 +59,19 @@ Common capability IDs:
 - `invariant:capability.inspector`
 - `invariant:capability.fs_sandbox`
 - `invariant:capability.workspace`
-- `invariant:capability.http` (optional)
-- `invariant:capability.kv` (optional)
+- `invariant:capability.http`
+- `invariant:capability.kv`
 
-Capability contract details: `CAPABILITIES.md`.
+Capability contract details live in `CAPABILITIES.md`.
 
 ## Runtime modes
 
-- `service.get(...)`:
-  managed singleton path.
-- `service.execution(...)`:
-  execution-scoped runtime.
-- `service.workspace(...)`:
-  execution with persistent workspace root.
+- `service.get(...)`
+  managed singleton path
+- `service.execution(...)`
+  execution-scoped runtime
+- `service.workspace(...)`
+  execution with persistent workspace root
 
 ## Policy profiles
 
@@ -89,13 +89,11 @@ API:
 
 ## Source status
 
-- `ManifestSource`, `FilesystemSource` are working.
-- `EntrypointSource`, `ZipSource`, `RemoteSource` are currently stubs.
+- `ManifestSource` and `FilesystemSource` are working
+- `EntrypointSource`, `ZipSource`, and `RemoteSource` are still stubs
 
-## Out of core scope
+## Deliberate exclusions
 
-- Agent Factory boot assembly: `apps/run_factory/bootstrap/service_factory.py`
-- Agent Factory CLI: `apps/run_factory/cli/main.py`
-- Domain plugin packs: `plugin_packs/**`
-
-These parts evolve faster than core and should not force core-level breaking changes without clear reason.
+- agent and task contracts do not belong in `invariant/spec`
+- product-specific orchestration belongs in `apps/character_os/`
+- domain plugins belong in `plugin_packs/character_os/`

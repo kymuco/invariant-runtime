@@ -10,7 +10,7 @@ from tests.fake_service import FakePluginService
 class _ConfigAwareService(FakePluginService):
     def policy_config_for_profile(self, profile: str) -> dict[str, object]:
         assert profile in {"dev", "stage", "prod"}
-        return {"quality_gate.max_checks": 7, "run_factory.approval.ttl_s": 600}
+        return {"quality_gate.max_checks": 7, "character_os.session.ttl_s": 600}
 
 
 class _BadConfigService(FakePluginService):
@@ -26,7 +26,7 @@ def test_runtime_host_injects_policy_profile_config_into_policies():
     )
     try:
         assert host._policies["ephemeral"].config["quality_gate.max_checks"] == 7  # noqa: SLF001
-        assert host._policies["managed"].config["run_factory.approval.ttl_s"] == 600  # noqa: SLF001
+        assert host._policies["managed"].config["character_os.session.ttl_s"] == 600  # noqa: SLF001
     finally:
         host.close()
 
