@@ -74,12 +74,12 @@ def test_http_health_smoke(daemon_server):
     assert j["ok"] is True
     assert "boot_id" in j
     assert "started_at" in j
-    assert "agent_run_worker" in j
-    assert isinstance(j["agent_run_worker"], dict)
-    assert j["agent_run_worker"].get("enabled") is False
-    assert "agent_run_alerting" in j
-    assert isinstance(j["agent_run_alerting"], dict)
-    assert j["agent_run_alerting"].get("enabled") is False
+    assert "run_worker" in j
+    assert isinstance(j["run_worker"], dict)
+    assert j["run_worker"].get("enabled") is False
+    assert "run_alerting" in j
+    assert isinstance(j["run_alerting"], dict)
+    assert j["run_alerting"].get("enabled") is False
     # request_id РѕР±СЏР·Р°С‚РµР»РµРЅ РґР»СЏ РєРѕСЂСЂРµР»СЏС†РёРё РІ РїСЂРѕРґРµ
     assert "request_id" in j
 

@@ -5,9 +5,9 @@ import threading
 import time
 
 from invariant.ops.daemon import (
-    _agent_run_alert_loop,
-    _agent_run_queue_worker_loop,
-    _agent_run_replay_sampler_loop,
+    _run_alert_loop,
+    _run_queue_worker_loop,
+    _run_replay_sampler_loop,
 )
 
 
@@ -22,17 +22,17 @@ class _FakeRuntimeHost:
         return dict(self._fn(payload, len(self.calls)))
 
 
-def test_agent_run_queue_worker_loop_exits_on_invalid_command():
+def test_run_queue_worker_loop_exits_on_invalid_command():
     stop_event = threading.Event()
     host = _FakeRuntimeHost(
         lambda _cmd, _n: {
             "ok": False,
             "error": "invalid_command",
-            "message": "agent run API is not available in this service",
+            "message": "run API is not available in this service",
         }
     )
 
-    _agent_run_queue_worker_loop(
+    _run_queue_worker_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         worker_id="w-invalid",
@@ -43,13 +43,13 @@ def test_agent_run_queue_worker_loop_exits_on_invalid_command():
 
     assert len(host.calls) == 1
     first = host.calls[0]
-    assert first["cmd"] == "agent_run_worker_process"
+    assert first["cmd"] == "run_worker_process"
     assert first["worker_id"] == "w-invalid"
     assert first["lease_seconds"] == 30
     assert first["reclaim_expired"] is True
 
 
-def test_agent_run_queue_worker_loop_processes_until_stop_event():
+def test_run_queue_worker_loop_processes_until_stop_event():
     stop_event = threading.Event()
 
     def _handler(_cmd: dict[str, object], n: int) -> dict[str, object]:
@@ -66,7 +66,7 @@ def test_agent_run_queue_worker_loop_processes_until_stop_event():
 
     host = _FakeRuntimeHost(_handler)
 
-    _agent_run_queue_worker_loop(
+    _run_queue_worker_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         worker_id="w-queue",
@@ -77,19 +77,19 @@ def test_agent_run_queue_worker_loop_processes_until_stop_event():
 
     assert len(host.calls) == 3
     for item in host.calls:
-        assert item["cmd"] == "agent_run_worker_process"
+        assert item["cmd"] == "run_worker_process"
         assert item["worker_id"] == "w-queue"
         assert item["lease_seconds"] == 45
         assert item["reclaim_expired"] is False
 
 
-def test_agent_run_alert_loop_exits_on_invalid_command(tmp_path):
+def test_run_alert_loop_exits_on_invalid_command(tmp_path):
     stop_event = threading.Event()
     host = _FakeRuntimeHost(
         lambda _cmd, _n: {
             "ok": False,
             "error": "invalid_command",
-            "message": "agent run API is not available in this service",
+            "message": "run API is not available in this service",
         }
     )
     sent: list[dict[str, object]] = []
@@ -98,7 +98,7 @@ def test_agent_run_alert_loop_exits_on_invalid_command(tmp_path):
         sent.append(dict(kwargs))
         return {"ok": True, "status_code": 200}
 
-    _agent_run_alert_loop(
+    _run_alert_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         alert_config={
@@ -120,11 +120,11 @@ def test_agent_run_alert_loop_exits_on_invalid_command(tmp_path):
     )
 
     assert len(host.calls) == 1
-    assert host.calls[0]["cmd"] == "agent_run_observability"
+    assert host.calls[0]["cmd"] == "run_observability"
     assert sent == []
 
 
-def test_agent_run_alert_loop_sends_and_suppresses_by_cooldown(tmp_path):
+def test_run_alert_loop_sends_and_suppresses_by_cooldown(tmp_path):
     stop_event = threading.Event()
     ts = float(time.time())
 
@@ -183,7 +183,7 @@ def test_agent_run_alert_loop_sends_and_suppresses_by_cooldown(tmp_path):
         return {"ok": True, "status_code": 204}
 
     state_path = tmp_path / "alerts_state.json"
-    _agent_run_alert_loop(
+    _run_alert_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         alert_config={
@@ -214,16 +214,16 @@ def test_agent_run_alert_loop_sends_and_suppresses_by_cooldown(tmp_path):
     assert state_obj["alerts"] == {}
 
 
-def test_agent_run_replay_sampler_loop_exits_on_invalid_command():
+def test_run_replay_sampler_loop_exits_on_invalid_command():
     stop_event = threading.Event()
     host = _FakeRuntimeHost(
         lambda _cmd, _n: {
             "ok": False,
             "error": "invalid_command",
-            "message": "agent run API is not available in this service",
+            "message": "run API is not available in this service",
         }
     )
-    _agent_run_replay_sampler_loop(
+    _run_replay_sampler_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         sampler_config={
@@ -241,13 +241,13 @@ def test_agent_run_replay_sampler_loop_exits_on_invalid_command():
     )
     assert len(host.calls) == 1
     first = host.calls[0]
-    assert first["cmd"] == "agent_run_replay_batch"
+    assert first["cmd"] == "run_replay_batch"
     assert first["limit"] == 30
     assert first["max_runs"] == 5
     assert first["cooldown_seconds"] == 60.0
 
 
-def test_agent_run_replay_sampler_loop_processes_until_stop_event():
+def test_run_replay_sampler_loop_processes_until_stop_event():
     stop_event = threading.Event()
 
     def _handler(_cmd: dict[str, object], n: int) -> dict[str, object]:
@@ -265,7 +265,7 @@ def test_agent_run_replay_sampler_loop_processes_until_stop_event():
         }
 
     host = _FakeRuntimeHost(_handler)
-    _agent_run_replay_sampler_loop(
+    _run_replay_sampler_loop(
         runtime_host=host,  # type: ignore[arg-type]
         stop_event=stop_event,
         sampler_config={
@@ -282,7 +282,7 @@ def test_agent_run_replay_sampler_loop_processes_until_stop_event():
     )
     assert len(host.calls) == 3
     for item in host.calls:
-        assert item["cmd"] == "agent_run_replay_batch"
+        assert item["cmd"] == "run_replay_batch"
         assert item["limit"] == 20
         assert item["max_runs"] == 4
         assert item["policy"] == "managed"

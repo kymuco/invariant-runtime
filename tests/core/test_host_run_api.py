@@ -258,17 +258,17 @@ def test_run_submit_forwards_experimental_opt_in():
         host.close()
 
 
-def test_agent_run_other_commands_route_to_service_methods():
+def test_run_commands_route_to_service_methods():
     service = _RunApiService()
     host = _host(service)
     try:
-        status = host.handle({"cmd": "agent_run_status", "run_id": "af-run-1"})
-        report = host.handle({"cmd": "agent_run_report", "run_id": "af-run-1"})
-        listed = host.handle({"cmd": "agent_run_list", "limit": 5})
-        health = host.handle({"cmd": "agent_run_health", "limit": 20, "repair": True})
+        status = host.handle({"cmd": "run_status", "run_id": "af-run-1"})
+        report = host.handle({"cmd": "run_report", "run_id": "af-run-1"})
+        listed = host.handle({"cmd": "run_list", "limit": 5})
+        health = host.handle({"cmd": "run_health", "limit": 20, "repair": True})
         observability = host.handle(
             {
-                "cmd": "agent_run_observability",
+                "cmd": "run_observability",
                 "limit": 40,
                 "fail_spike_window": 10,
                 "fail_spike_threshold_pct": 25.0,
@@ -277,27 +277,27 @@ def test_agent_run_other_commands_route_to_service_methods():
                 "trace_target_pct": 100.0,
             }
         )
-        queue_stats = host.handle({"cmd": "agent_run_queue_stats"})
-        queue_reclaim = host.handle({"cmd": "agent_run_queue_reclaim", "limit": 3})
+        queue_stats = host.handle({"cmd": "run_queue_stats"})
+        queue_reclaim = host.handle({"cmd": "run_queue_reclaim", "limit": 3})
         queue_process = host.handle(
-            {"cmd": "agent_run_worker_process", "worker_id": "w-1", "lease_seconds": 45, "reclaim_expired": False}
+            {"cmd": "run_worker_process", "worker_id": "w-1", "lease_seconds": 45, "reclaim_expired": False}
         )
-        dlq = host.handle({"cmd": "agent_run_dlq", "limit": 4})
+        dlq = host.handle({"cmd": "run_dlq", "limit": 4})
         migration = host.handle(
             {
-                "cmd": "agent_run_migrate_storage",
+                "cmd": "run_migrate_storage",
                 "dry_run": False,
                 "backup_legacy": True,
                 "prune_legacy": True,
                 "force": True,
             }
         )
-        cancelled = host.handle({"cmd": "agent_run_cancel", "run_id": "af-run-1", "reason": "manual_stop"})
-        resumed = host.handle({"cmd": "agent_run_resume", "run_id": "af-run-1", "policy": "ephemeral"})
-        aborted = host.handle({"cmd": "agent_run_abort", "run_id": "af-run-1"})
+        cancelled = host.handle({"cmd": "run_cancel", "run_id": "af-run-1", "reason": "manual_stop"})
+        resumed = host.handle({"cmd": "run_resume", "run_id": "af-run-1", "policy": "ephemeral"})
+        aborted = host.handle({"cmd": "run_abort", "run_id": "af-run-1"})
         approved = host.handle(
             {
-                "cmd": "agent_run_approve",
+                "cmd": "run_approve",
                 "run_id": "af-run-1",
                 "stage": "EDIT",
                 "token": "tok-abc",
@@ -306,7 +306,7 @@ def test_agent_run_other_commands_route_to_service_methods():
         )
         replayed = host.handle(
             {
-                "cmd": "agent_run_replay",
+                "cmd": "run_replay",
                 "run_id": "af-run-1",
                 "policy": "ephemeral",
                 "strict": False,
@@ -314,7 +314,7 @@ def test_agent_run_other_commands_route_to_service_methods():
         )
         replay_batch = host.handle(
             {
-                "cmd": "agent_run_replay_batch",
+                "cmd": "run_replay_batch",
                 "limit": 30,
                 "max_runs": 7,
                 "cooldown_seconds": 120.0,
@@ -425,7 +425,7 @@ def test_run_submit_rejects_non_boolean_experimental():
         host.close()
 
 
-def test_agent_run_commands_reject_invalid_run_id():
+def test_run_commands_reject_invalid_run_id():
     invalid_ids = [
         "",
         "   ",
@@ -436,13 +436,13 @@ def test_agent_run_commands_reject_invalid_run_id():
         "a" * 129,
     ]
     command_templates = [
-        {"cmd": "agent_run_status"},
-        {"cmd": "agent_run_report"},
-        {"cmd": "agent_run_cancel"},
-        {"cmd": "agent_run_resume"},
-        {"cmd": "agent_run_abort"},
-        {"cmd": "agent_run_approve", "stage": "EDIT", "token": "tok-123"},
-        {"cmd": "agent_run_replay"},
+        {"cmd": "run_status"},
+        {"cmd": "run_report"},
+        {"cmd": "run_cancel"},
+        {"cmd": "run_resume"},
+        {"cmd": "run_abort"},
+        {"cmd": "run_approve", "stage": "EDIT", "token": "tok-123"},
+        {"cmd": "run_replay"},
     ]
 
     service = _RunApiService()
@@ -462,10 +462,10 @@ def test_agent_run_commands_reject_invalid_run_id():
         host.close()
 
 
-def test_agent_run_commands_fail_when_service_has_no_run_api():
+def test_run_commands_fail_when_service_has_no_run_api():
     host = RuntimeHost(plugin_service=FakePluginService(), enable_watchdog=False)
     try:
-        out = host.handle({"cmd": "agent_run_status", "run_id": "af-run-1"})
+        out = host.handle({"cmd": "run_status", "run_id": "af-run-1"})
         assert out["ok"] is False
         assert out["error"] == "invalid_command"
     finally:

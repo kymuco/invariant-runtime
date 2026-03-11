@@ -279,7 +279,7 @@ class RuntimeHost:
                 info = self._supervisor.touch(execution_id, ttl_seconds=ttl)
                 return {"ok": True, **info}
 
-            # ---- app-level Agent Factory run API ----
+            # ---- app-level run API ----
             if cmd == "run_submit":
                 pipeline = command.get("pipeline")
                 if not isinstance(pipeline, str) or not pipeline.strip():
@@ -341,7 +341,7 @@ class RuntimeHost:
                 if not isinstance(experimental, bool):
                     raise InvalidCommand("experimental must be a boolean")
 
-                run = self._agent_run_call(
+                run = self._run_call(
                     "run_submit",
                     pipeline=str(pipeline).strip(),
                     inputs=inputs_obj,
@@ -364,34 +364,34 @@ class RuntimeHost:
                 )
                 return {"ok": True, "run": run}
 
-            if cmd == "agent_run_status":
+            if cmd == "run_status":
                 run_id = self._normalize_run_id(command.get("run_id"))
-                out = self._agent_run_call("run_status", run_id=run_id)
+                out = self._run_call("run_status", run_id=run_id)
                 return {"ok": True, "run": out}
 
-            if cmd == "agent_run_report":
+            if cmd == "run_report":
                 run_id = self._normalize_run_id(command.get("run_id"))
-                out = self._agent_run_call("run_report", run_id=run_id)
+                out = self._run_call("run_report", run_id=run_id)
                 return {"ok": True, "report": out}
 
-            if cmd == "agent_run_list":
+            if cmd == "run_list":
                 limit = command.get("limit", 50)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
-                out = self._agent_run_call("run_list", limit=int(limit))
+                out = self._run_call("run_list", limit=int(limit))
                 return {"ok": True, **out}
 
-            if cmd == "agent_run_health":
+            if cmd == "run_health":
                 limit = command.get("limit", 1000)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
                 repair = command.get("repair", False)
                 if not isinstance(repair, bool):
                     raise InvalidCommand("repair must be a boolean")
-                out = self._agent_run_call("run_health", limit=int(limit), repair=bool(repair))
+                out = self._run_call("run_health", limit=int(limit), repair=bool(repair))
                 return {"ok": True, "health": out}
 
-            if cmd == "agent_run_observability":
+            if cmd == "run_observability":
                 limit = command.get("limit", 1000)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
@@ -411,7 +411,7 @@ class RuntimeHost:
                 if not isinstance(trace_target_pct, (int, float)):
                     raise InvalidCommand("trace_target_pct must be numeric")
 
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_observability",
                     limit=int(limit),
                     fail_spike_window=int(fail_spike_window),
@@ -422,18 +422,18 @@ class RuntimeHost:
                 )
                 return {"ok": True, "observability": out}
 
-            if cmd == "agent_run_queue_stats":
-                out = self._agent_run_call("run_queue_stats")
+            if cmd == "run_queue_stats":
+                out = self._run_call("run_queue_stats")
                 return {"ok": True, "queue": out}
 
-            if cmd == "agent_run_queue_reclaim":
+            if cmd == "run_queue_reclaim":
                 limit = command.get("limit", 100)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
-                out = self._agent_run_call("run_queue_reclaim", limit=int(limit))
+                out = self._run_call("run_queue_reclaim", limit=int(limit))
                 return {"ok": True, **out}
 
-            if cmd == "agent_run_worker_process":
+            if cmd == "run_worker_process":
                 worker_id = command.get("worker_id")
                 if worker_id is None:
                     worker_id = ""
@@ -445,7 +445,7 @@ class RuntimeHost:
                 reclaim_expired = command.get("reclaim_expired", True)
                 if not isinstance(reclaim_expired, bool):
                     raise InvalidCommand("reclaim_expired must be a boolean")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_queue_process",
                     worker_id=str(worker_id).strip(),
                     lease_seconds=(int(lease_seconds) if isinstance(lease_seconds, int) else None),
@@ -453,14 +453,14 @@ class RuntimeHost:
                 )
                 return {"ok": True, "worker": out}
 
-            if cmd == "agent_run_dlq":
+            if cmd == "run_dlq":
                 limit = command.get("limit", 100)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
-                out = self._agent_run_call("run_dlq", limit=int(limit))
+                out = self._run_call("run_dlq", limit=int(limit))
                 return {"ok": True, "dlq": out}
 
-            if cmd == "agent_run_migrate_storage":
+            if cmd == "run_migrate_storage":
                 dry_run = command.get("dry_run", True)
                 if not isinstance(dry_run, bool):
                     raise InvalidCommand("dry_run must be a boolean")
@@ -473,7 +473,7 @@ class RuntimeHost:
                 force = command.get("force", False)
                 if not isinstance(force, bool):
                     raise InvalidCommand("force must be a boolean")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_migrate_storage",
                     dry_run=bool(dry_run),
                     backup_legacy=bool(backup_legacy),
@@ -482,15 +482,15 @@ class RuntimeHost:
                 )
                 return {"ok": True, "migration": out}
 
-            if cmd == "agent_run_cancel":
+            if cmd == "run_cancel":
                 run_id = self._normalize_run_id(command.get("run_id"))
                 reason = command.get("reason", "cancel_requested")
                 if not isinstance(reason, str):
                     raise InvalidCommand("reason must be a string")
-                out = self._agent_run_call("run_cancel", run_id=run_id, reason=str(reason).strip())
+                out = self._run_call("run_cancel", run_id=run_id, reason=str(reason).strip())
                 return {"ok": True, "run": out}
 
-            if cmd == "agent_run_resume":
+            if cmd == "run_resume":
                 run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
@@ -507,7 +507,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_path must be a string")
                 if workspace_id and workspace_path:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_resume",
                     run_id=run_id,
                     policy=policy,
@@ -518,7 +518,7 @@ class RuntimeHost:
                 )
                 return {"ok": True, "run": out}
 
-            if cmd == "agent_run_abort":
+            if cmd == "run_abort":
                 run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
@@ -535,7 +535,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_path must be a string")
                 if workspace_id and workspace_path:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_abort",
                     run_id=run_id,
                     policy=policy,
@@ -546,7 +546,7 @@ class RuntimeHost:
                 )
                 return {"ok": True, "run": out}
 
-            if cmd == "agent_run_approve":
+            if cmd == "run_approve":
                 run_id = self._normalize_run_id(command.get("run_id"))
                 stage = command.get("stage")
                 if not isinstance(stage, str) or not stage.strip():
@@ -569,7 +569,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_path must be a string")
                 if workspace_id and workspace_path:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_approve",
                     run_id=run_id,
                     stage=str(stage).strip(),
@@ -582,7 +582,7 @@ class RuntimeHost:
                 )
                 return {"ok": True, "run": out}
 
-            if cmd == "agent_run_replay":
+            if cmd == "run_replay":
                 run_id = self._normalize_run_id(command.get("run_id"))
                 policy = self._parse_policy(command.get("policy"))
                 ttl = command.get("ttl_seconds", 1200)
@@ -602,7 +602,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_path must be a string")
                 if workspace_id and workspace_path:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_replay",
                     run_id=run_id,
                     policy=policy,
@@ -614,7 +614,7 @@ class RuntimeHost:
                 )
                 return {"ok": True, "replay": out}
 
-            if cmd == "agent_run_replay_batch":
+            if cmd == "run_replay_batch":
                 limit = command.get("limit", 200)
                 if not isinstance(limit, int):
                     raise InvalidCommand("limit must be an integer")
@@ -642,7 +642,7 @@ class RuntimeHost:
                     raise InvalidCommand("workspace_path must be a string")
                 if workspace_id and workspace_path:
                     raise InvalidCommand("workspace_id and workspace_path are mutually exclusive")
-                out = self._agent_run_call(
+                out = self._run_call(
                     "run_replay_batch",
                     limit=int(limit),
                     max_runs=int(max_runs),
@@ -726,10 +726,10 @@ class RuntimeHost:
         except Exception as e:
             return {"ok": False, "error": "internal_error", "message": str(e)}
 
-    def _agent_run_call(self, method_name: str, /, **kwargs: Any) -> dict[str, Any]:
+    def _run_call(self, method_name: str, /, **kwargs: Any) -> dict[str, Any]:
         method = getattr(self._service, method_name, None)
         if not callable(method):
-            raise InvalidCommand("agent run API is not available in this service")
+            raise InvalidCommand("run API is not available in this service")
         result = method(**kwargs)
         if not isinstance(result, dict):
             raise InvalidCommand(f"{method_name} must return object payload")

@@ -685,20 +685,20 @@ class JsonAPIHandler(BaseHTTPRequestHandler):
                     "ts": self._now(),
                     "boot_id": self.server.boot_id,
                     "started_at": self.server.started_at,
-                    "agent_run_worker": {
+                    "run_worker": {
                         "enabled": bool(getattr(self.server, "run_worker_enabled", False)),
                         "worker_id": str(getattr(self.server, "run_worker_id", "") or ""),
                         "lease_seconds": int(getattr(self.server, "run_worker_lease_seconds", 120)),
                         "poll_interval_s": float(getattr(self.server, "run_worker_poll_interval_s", 0.5)),
                         "reclaim_expired": bool(getattr(self.server, "run_worker_reclaim_expired", True)),
                     },
-                    "agent_run_alerting": {
+                    "run_alerting": {
                         "enabled": bool(getattr(self.server, "run_alerting_enabled", False)),
                         "poll_interval_s": float(getattr(self.server, "run_alerting_poll_interval_s", 30.0)),
                         "cooldown_s": int(getattr(self.server, "run_alerting_cooldown_s", 300)),
                         "webhook_configured": bool(str(getattr(self.server, "run_alerting_webhook_url", "") or "").strip()),
                     },
-                    "agent_run_replay_sampler": {
+                    "run_replay_sampler": {
                         "enabled": bool(getattr(self.server, "run_replay_sampler_enabled", False)),
                         "poll_interval_s": float(getattr(self.server, "run_replay_sampler_poll_interval_s", 60.0)),
                         "scan_limit": int(getattr(self.server, "run_replay_sampler_scan_limit", 200)),
@@ -813,7 +813,7 @@ def _setup_logging(level: str) -> None:
     )
 
 
-def _agent_run_queue_worker_loop(
+def _run_queue_worker_loop(
     *,
     runtime_host: RuntimeHost,
     stop_event: threading.Event,
@@ -830,7 +830,7 @@ def _agent_run_queue_worker_loop(
     failures = 0
 
     log.info(
-        "Agent run queue worker started worker_id=%s lease_seconds=%s poll_interval_s=%.3f reclaim_expired=%s",
+        "Run queue worker started worker_id=%s lease_seconds=%s poll_interval_s=%.3f reclaim_expired=%s",
         wid,
         lease,
         poll_s,
@@ -841,7 +841,7 @@ def _agent_run_queue_worker_loop(
         try:
             resp = runtime_host.handle(
                 {
-                    "cmd": "agent_run_worker_process",
+                    "cmd": "run_worker_process",
                     "worker_id": wid,
                     "lease_seconds": lease,
                     "reclaim_expired": bool(reclaim_expired),
@@ -849,14 +849,14 @@ def _agent_run_queue_worker_loop(
             )
         except Exception:
             failures += 1
-            log.exception("Agent run queue worker crashed on runtime_host.handle")
+            log.exception("Run queue worker crashed on runtime_host.handle")
             stop_event.wait(min(2.0, poll_s))
             continue
 
         if not isinstance(resp, Mapping):
             failures += 1
             if failures <= 3 or failures % 50 == 0:
-                log.warning("Agent run queue worker received non-object response: %r", resp)
+                log.warning("Run queue worker received non-object response: %r", resp)
             stop_event.wait(min(2.0, poll_s))
             continue
 
@@ -864,11 +864,11 @@ def _agent_run_queue_worker_loop(
             err = str(resp.get("error") or "")
             msg = str(resp.get("message") or "")
             if err == "invalid_command":
-                log.warning("Agent run queue worker disabled: %s", msg or err)
+                log.warning("Run queue worker disabled: %s", msg or err)
                 break
             failures += 1
             if failures <= 3 or failures % 50 == 0:
-                log.warning("Agent run queue worker call failed error=%s message=%s", err or "unknown", msg)
+                log.warning("Run queue worker call failed error=%s message=%s", err or "unknown", msg)
             stop_event.wait(min(2.0, poll_s))
             continue
 
@@ -876,14 +876,14 @@ def _agent_run_queue_worker_loop(
         if not isinstance(worker, Mapping):
             failures += 1
             if failures <= 3 or failures % 50 == 0:
-                log.warning("Agent run queue worker missing 'worker' payload: %r", resp)
+                log.warning("Run queue worker missing 'worker' payload: %r", resp)
             stop_event.wait(min(2.0, poll_s))
             continue
 
         if not bool(worker.get("ok", False)):
             failures += 1
             if failures <= 3 or failures % 50 == 0:
-                log.warning("Agent run queue worker returned worker.ok=false: %r", worker)
+                log.warning("Run queue worker returned worker.ok=false: %r", worker)
             stop_event.wait(min(2.0, poll_s))
             continue
 
@@ -891,14 +891,14 @@ def _agent_run_queue_worker_loop(
             claimed_jobs += 1
             idle_loops = 0
             if claimed_jobs <= 3 or claimed_jobs % 100 == 0:
-                log.info("Agent run queue worker processed jobs=%s worker_id=%s", claimed_jobs, wid)
+                log.info("Run queue worker processed jobs=%s worker_id=%s", claimed_jobs, wid)
             continue
 
         idle_loops += 1
         stop_event.wait(poll_s)
 
     log.info(
-        "Agent run queue worker stopped worker_id=%s claimed_jobs=%s idle_loops=%s failures=%s",
+        "Run queue worker stopped worker_id=%s claimed_jobs=%s idle_loops=%s failures=%s",
         wid,
         claimed_jobs,
         idle_loops,
@@ -949,7 +949,7 @@ def _resolve_alerting_profile_name(policy_profile: str | None) -> str:
     return raw or "dev"
 
 
-def _resolve_agent_run_alerting_config(*, service: Any, policy_profile: str | None) -> dict[str, Any]:
+def _resolve_run_alerting_config(*, service: Any, policy_profile: str | None) -> dict[str, Any]:
     profile = _resolve_alerting_profile_name(policy_profile)
     raw_cfg: dict[str, Any] = {}
     provider = getattr(service, "policy_config_for_profile", None)
@@ -961,30 +961,30 @@ def _resolve_agent_run_alerting_config(*, service: Any, policy_profile: str | No
         except Exception:
             log.exception("Failed to load alerting policy config profile=%s", profile)
 
-    enabled = _coerce_bool(raw_cfg.get("run_factory.alerts.enabled"), default=False)
-    webhook_url = str(raw_cfg.get("run_factory.alerts.webhook_url") or "").strip()
-    timeout_s = _coerce_float(raw_cfg.get("run_factory.alerts.timeout_s"), default=5.0, minimum=0.1)
-    cooldown_s = _coerce_int(raw_cfg.get("run_factory.alerts.cooldown_s"), default=300, minimum=0)
-    poll_interval_s = _coerce_float(raw_cfg.get("run_factory.alerts.poll_interval_s"), default=30.0, minimum=1.0)
-    scan_limit = _coerce_int(raw_cfg.get("run_factory.alerts.scan_limit"), default=1000, minimum=1)
-    fail_spike_window = _coerce_int(raw_cfg.get("run_factory.alerts.fail_spike_window"), default=20, minimum=1)
+    enabled = _coerce_bool(raw_cfg.get("invariant.runs.alerts.enabled"), default=False)
+    webhook_url = str(raw_cfg.get("invariant.runs.alerts.webhook_url") or "").strip()
+    timeout_s = _coerce_float(raw_cfg.get("invariant.runs.alerts.timeout_s"), default=5.0, minimum=0.1)
+    cooldown_s = _coerce_int(raw_cfg.get("invariant.runs.alerts.cooldown_s"), default=300, minimum=0)
+    poll_interval_s = _coerce_float(raw_cfg.get("invariant.runs.alerts.poll_interval_s"), default=30.0, minimum=1.0)
+    scan_limit = _coerce_int(raw_cfg.get("invariant.runs.alerts.scan_limit"), default=1000, minimum=1)
+    fail_spike_window = _coerce_int(raw_cfg.get("invariant.runs.alerts.fail_spike_window"), default=20, minimum=1)
     fail_spike_threshold_pct = _coerce_float(
-        raw_cfg.get("run_factory.alerts.fail_spike_threshold_pct"),
+        raw_cfg.get("invariant.runs.alerts.fail_spike_threshold_pct"),
         default=40.0,
         minimum=0.0,
     )
-    stuck_run_seconds = _coerce_int(raw_cfg.get("run_factory.alerts.stuck_run_seconds"), default=1800, minimum=1)
-    replay_target_pct = _coerce_float(raw_cfg.get("run_factory.alerts.replay_target_pct"), default=95.0, minimum=0.0)
-    trace_target_pct = _coerce_float(raw_cfg.get("run_factory.alerts.trace_target_pct"), default=100.0, minimum=0.0)
+    stuck_run_seconds = _coerce_int(raw_cfg.get("invariant.runs.alerts.stuck_run_seconds"), default=1800, minimum=1)
+    replay_target_pct = _coerce_float(raw_cfg.get("invariant.runs.alerts.replay_target_pct"), default=95.0, minimum=0.0)
+    trace_target_pct = _coerce_float(raw_cfg.get("invariant.runs.alerts.trace_target_pct"), default=100.0, minimum=0.0)
 
-    state_path_raw = str(raw_cfg.get("run_factory.alerts.state_path") or "").strip()
+    state_path_raw = str(raw_cfg.get("invariant.runs.alerts.state_path") or "").strip()
     if not state_path_raw:
-        state_path_raw = ".invariant/run_registry/run_factory/alerts_state.json"
+        state_path_raw = ".invariant/run_registry/runs/alerts_state.json"
     state_path = Path(state_path_raw)
     if not state_path.is_absolute():
         state_path = state_path.resolve()
 
-    secret_env_name = str(raw_cfg.get("run_factory.alerts.webhook_hmac_secret_env") or "").strip()
+    secret_env_name = str(raw_cfg.get("invariant.runs.alerts.webhook_hmac_secret_env") or "").strip()
     hmac_secret: str | None = None
     if secret_env_name:
         hmac_secret = str(os.environ.get(secret_env_name, "")).strip() or None
@@ -1008,7 +1008,7 @@ def _resolve_agent_run_alerting_config(*, service: Any, policy_profile: str | No
     }
 
 
-def _resolve_agent_run_replay_sampler_config(*, service: Any, policy_profile: str | None) -> dict[str, Any]:
+def _resolve_run_replay_sampler_config(*, service: Any, policy_profile: str | None) -> dict[str, Any]:
     profile = _resolve_alerting_profile_name(policy_profile)
     raw_cfg: dict[str, Any] = {}
     provider = getattr(service, "policy_config_for_profile", None)
@@ -1020,16 +1020,16 @@ def _resolve_agent_run_replay_sampler_config(*, service: Any, policy_profile: st
         except Exception:
             log.exception("Failed to load replay sampler policy config profile=%s", profile)
 
-    enabled = _coerce_bool(raw_cfg.get("run_factory.replay_sampler.enabled"), default=False)
-    poll_interval_s = _coerce_float(raw_cfg.get("run_factory.replay_sampler.poll_interval_s"), default=60.0, minimum=1.0)
-    scan_limit = _coerce_int(raw_cfg.get("run_factory.replay_sampler.scan_limit"), default=200, minimum=1)
-    max_runs = _coerce_int(raw_cfg.get("run_factory.replay_sampler.max_runs"), default=20, minimum=1)
-    cooldown_s = _coerce_float(raw_cfg.get("run_factory.replay_sampler.cooldown_seconds"), default=900.0, minimum=0.0)
-    strict = _coerce_bool(raw_cfg.get("run_factory.replay_sampler.strict"), default=True)
-    policy = str(raw_cfg.get("run_factory.replay_sampler.policy") or "ephemeral").strip().lower()
+    enabled = _coerce_bool(raw_cfg.get("invariant.runs.replay_sampler.enabled"), default=False)
+    poll_interval_s = _coerce_float(raw_cfg.get("invariant.runs.replay_sampler.poll_interval_s"), default=60.0, minimum=1.0)
+    scan_limit = _coerce_int(raw_cfg.get("invariant.runs.replay_sampler.scan_limit"), default=200, minimum=1)
+    max_runs = _coerce_int(raw_cfg.get("invariant.runs.replay_sampler.max_runs"), default=20, minimum=1)
+    cooldown_s = _coerce_float(raw_cfg.get("invariant.runs.replay_sampler.cooldown_seconds"), default=900.0, minimum=0.0)
+    strict = _coerce_bool(raw_cfg.get("invariant.runs.replay_sampler.strict"), default=True)
+    policy = str(raw_cfg.get("invariant.runs.replay_sampler.policy") or "ephemeral").strip().lower()
     if policy not in {"ephemeral", "managed"}:
         policy = "ephemeral"
-    ttl_seconds = _coerce_int(raw_cfg.get("run_factory.replay_sampler.ttl_seconds"), default=1200, minimum=1)
+    ttl_seconds = _coerce_int(raw_cfg.get("invariant.runs.replay_sampler.ttl_seconds"), default=1200, minimum=1)
 
     return {
         "profile": profile,
@@ -1114,7 +1114,7 @@ def _send_alert_webhook(
         return {"ok": False, "error": f"{e.__class__.__name__}: {e}"}
 
 
-def _agent_run_replay_sampler_loop(
+def _run_replay_sampler_loop(
     *,
     runtime_host: RuntimeHost,
     stop_event: threading.Event,
@@ -1123,7 +1123,7 @@ def _agent_run_replay_sampler_loop(
 ) -> None:
     cfg = dict(sampler_config)
     if not bool(cfg.get("enabled", False)):
-        log.info("Agent run replay sampler disabled by config")
+        log.info("Run replay sampler disabled by config")
         return
 
     poll_s = _coerce_float(cfg.get("poll_interval_s"), default=60.0, minimum=1.0)
@@ -1139,7 +1139,7 @@ def _agent_run_replay_sampler_loop(
     cycles = 0
 
     log.info(
-        "Agent run replay sampler started profile=%s poll_interval_s=%.2f scan_limit=%s max_runs=%s cooldown_seconds=%.1f strict=%s",
+        "Run replay sampler started profile=%s poll_interval_s=%.2f scan_limit=%s max_runs=%s cooldown_seconds=%.1f strict=%s",
         profile or "default",
         poll_s,
         scan_limit,
@@ -1153,7 +1153,7 @@ def _agent_run_replay_sampler_loop(
         try:
             resp = runtime_host.handle(
                 {
-                    "cmd": "agent_run_replay_batch",
+                    "cmd": "run_replay_batch",
                     "limit": int(scan_limit),
                     "max_runs": int(max_runs),
                     "cooldown_seconds": float(cooldown_s),
@@ -1163,14 +1163,14 @@ def _agent_run_replay_sampler_loop(
                 }
             )
         except Exception:
-            log.exception("Agent run replay sampler crashed on runtime_host.handle")
+            log.exception("Run replay sampler crashed on runtime_host.handle")
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
             continue
 
         if not isinstance(resp, Mapping):
-            log.warning("Agent run replay sampler received non-object response: %r", resp)
+            log.warning("Run replay sampler received non-object response: %r", resp)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1180,9 +1180,9 @@ def _agent_run_replay_sampler_loop(
             err = str(resp.get("error") or "")
             msg = str(resp.get("message") or "")
             if err == "invalid_command":
-                log.warning("Agent run replay sampler disabled by runtime host: %s", msg or err)
+                log.warning("Run replay sampler disabled by runtime host: %s", msg or err)
                 break
-            log.warning("Agent run replay sampler call failed error=%s message=%s", err or "unknown", msg)
+            log.warning("Run replay sampler call failed error=%s message=%s", err or "unknown", msg)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1190,7 +1190,7 @@ def _agent_run_replay_sampler_loop(
 
         batch = resp.get("batch")
         if not isinstance(batch, Mapping):
-            log.warning("Agent run replay sampler missing batch payload: %r", resp)
+            log.warning("Run replay sampler missing batch payload: %r", resp)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1202,7 +1202,7 @@ def _agent_run_replay_sampler_loop(
         selected = int(batch.get("selected_runs") or 0)
         if attempted > 0 or cycles <= 3 or cycles % 20 == 0:
             log.info(
-                "Agent run replay sampler cycle=%s selected=%s attempted=%s passed=%s failed=%s",
+                "Run replay sampler cycle=%s selected=%s attempted=%s passed=%s failed=%s",
                 cycles,
                 selected,
                 attempted,
@@ -1214,10 +1214,10 @@ def _agent_run_replay_sampler_loop(
         if max_cycles is not None and cycles >= int(max_cycles):
             break
 
-    log.info("Agent run replay sampler stopped cycles=%s profile=%s", cycles, profile or "default")
+    log.info("Run replay sampler stopped cycles=%s profile=%s", cycles, profile or "default")
 
 
-def _agent_run_alert_loop(
+def _run_alert_loop(
     *,
     runtime_host: RuntimeHost,
     stop_event: threading.Event,
@@ -1228,7 +1228,7 @@ def _agent_run_alert_loop(
     cfg = dict(alert_config)
     webhook_url = str(cfg.get("webhook_url") or "").strip()
     if not webhook_url:
-        log.warning("Agent run alert loop disabled: webhook URL is empty")
+        log.warning("Run alert loop disabled: webhook URL is empty")
         return
 
     notify = notifier or _send_alert_webhook
@@ -1241,13 +1241,13 @@ def _agent_run_alert_loop(
     stuck_run_seconds = _coerce_int(cfg.get("stuck_run_seconds"), default=1800, minimum=1)
     replay_target_pct = _coerce_float(cfg.get("replay_target_pct"), default=95.0, minimum=0.0)
     trace_target_pct = _coerce_float(cfg.get("trace_target_pct"), default=100.0, minimum=0.0)
-    state_path = Path(str(cfg.get("state_path") or ".invariant/run_registry/run_factory/alerts_state.json")).resolve()
+    state_path = Path(str(cfg.get("state_path") or ".invariant/run_registry/runs/alerts_state.json")).resolve()
     hmac_secret = str(cfg.get("hmac_secret") or "").strip() or None
     profile = str(cfg.get("profile") or "")
     cycles = 0
 
     log.info(
-        "Agent run alert loop started profile=%s poll_interval_s=%.2f cooldown_s=%s webhook=%s",
+        "Run alert loop started profile=%s poll_interval_s=%.2f cooldown_s=%s webhook=%s",
         profile or "default",
         poll_s,
         cooldown_s,
@@ -1259,7 +1259,7 @@ def _agent_run_alert_loop(
         try:
             resp = runtime_host.handle(
                 {
-                    "cmd": "agent_run_observability",
+                    "cmd": "run_observability",
                     "limit": int(scan_limit),
                     "fail_spike_window": int(fail_spike_window),
                     "fail_spike_threshold_pct": float(fail_spike_threshold_pct),
@@ -1269,14 +1269,14 @@ def _agent_run_alert_loop(
                 }
             )
         except Exception:
-            log.exception("Agent run alert loop failed to query observability")
+            log.exception("Run alert loop failed to query observability")
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
             continue
 
         if not isinstance(resp, Mapping):
-            log.warning("Agent run alert loop received non-object response: %r", resp)
+            log.warning("Run alert loop received non-object response: %r", resp)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1286,9 +1286,9 @@ def _agent_run_alert_loop(
             err = str(resp.get("error") or "")
             msg = str(resp.get("message") or "")
             if err == "invalid_command":
-                log.warning("Agent run alert loop disabled by runtime host: %s", msg or err)
+                log.warning("Run alert loop disabled by runtime host: %s", msg or err)
                 break
-            log.warning("Agent run alert loop host call failed error=%s message=%s", err or "unknown", msg)
+            log.warning("Run alert loop host call failed error=%s message=%s", err or "unknown", msg)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1296,7 +1296,7 @@ def _agent_run_alert_loop(
 
         observability = resp.get("observability")
         if not isinstance(observability, Mapping):
-            log.warning("Agent run alert loop missing observability payload: %r", resp)
+            log.warning("Run alert loop missing observability payload: %r", resp)
             stop_event.wait(min(5.0, poll_s))
             if max_cycles is not None and cycles >= int(max_cycles):
                 break
@@ -1339,7 +1339,7 @@ def _agent_run_alert_loop(
                     continue
 
                 payload = {
-                    "source": "invariant.run_factory.alert",
+                    "source": "invariant.runs.alert",
                     "ts_unix": now,
                     "profile": profile or None,
                     "alert_id": alert_id,
@@ -1370,13 +1370,13 @@ def _agent_run_alert_loop(
                 else:
                     failed += 1
                     log.warning(
-                        "Agent run alert delivery failed alert_id=%s payload=%s",
+                        "Run alert delivery failed alert_id=%s payload=%s",
                         alert_id,
                         dict(send_out or {}),
                     )
             if sent > 0 or failed > 0:
                 log.info(
-                    "Agent run alert loop delivered sent=%s failed=%s suppressed=%s triggered=%s",
+                    "Run alert loop delivered sent=%s failed=%s suppressed=%s triggered=%s",
                     sent,
                     failed,
                     suppressed,
@@ -1389,7 +1389,7 @@ def _agent_run_alert_loop(
         if max_cycles is not None and cycles >= int(max_cycles):
             break
 
-    log.info("Agent run alert loop stopped cycles=%s profile=%s", cycles, profile or "default")
+    log.info("Run alert loop stopped cycles=%s profile=%s", cycles, profile or "default")
 
 
 def run_daemon(
@@ -1417,8 +1417,8 @@ def run_daemon(
     run_worker_reclaim_expired: bool,
 ) -> int:
     service = factory()
-    alert_config = _resolve_agent_run_alerting_config(service=service, policy_profile=policy_profile)
-    replay_sampler_config = _resolve_agent_run_replay_sampler_config(service=service, policy_profile=policy_profile)
+    alert_config = _resolve_run_alerting_config(service=service, policy_profile=policy_profile)
+    replay_sampler_config = _resolve_run_replay_sampler_config(service=service, policy_profile=policy_profile)
     rh = RuntimeHost(
         plugin_service=service,
         enable_watchdog=enable_watchdog,
@@ -1491,8 +1491,8 @@ def run_daemon(
 
     if bool(run_worker_enabled):
         worker_thread = threading.Thread(
-            target=_agent_run_queue_worker_loop,
-            name="invariant-agent-run-worker",
+            target=_run_queue_worker_loop,
+            name="invariant-run-worker",
             daemon=True,
             kwargs={
                 "runtime_host": rh,
@@ -1507,8 +1507,8 @@ def run_daemon(
 
     if bool(replay_sampler_config.get("enabled", False)):
         replay_sampler_thread = threading.Thread(
-            target=_agent_run_replay_sampler_loop,
-            name="invariant-agent-run-replay-sampler",
+            target=_run_replay_sampler_loop,
+            name="invariant-run-replay-sampler",
             daemon=True,
             kwargs={
                 "runtime_host": rh,
@@ -1518,12 +1518,12 @@ def run_daemon(
         )
         replay_sampler_thread.start()
     elif bool(replay_sampler_config.get("configured_enabled", False)):
-        log.warning("Agent run replay sampler requested by policy but disabled by resolved config")
+        log.warning("Run replay sampler requested by policy but disabled by resolved config")
 
     if bool(alert_config.get("enabled", False)):
         alert_thread = threading.Thread(
-            target=_agent_run_alert_loop,
-            name="invariant-agent-run-alerts",
+            target=_run_alert_loop,
+            name="invariant-run-alerts",
             daemon=True,
             kwargs={
                 "runtime_host": rh,
@@ -1534,7 +1534,7 @@ def run_daemon(
         alert_thread.start()
     elif bool(alert_config.get("configured_enabled", False)):
         log.warning(
-            "Agent run alerting requested by policy but disabled due to missing webhook_url profile=%s",
+            "Run alerting requested by policy but disabled due to missing webhook_url profile=%s",
             str(alert_config.get("profile") or ""),
         )
 
@@ -1593,8 +1593,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--plugin-call-timeout-s", type=float, default=float(os.environ.get("INVARIANT_PLUGIN_CALL_TIMEOUT_S", "10")))
     p.add_argument("--plugin-call-workers", type=int, default=int(os.environ.get("INVARIANT_PLUGIN_CALL_WORKERS", "16")))
     p.add_argument("--plugin-call-queue-size", type=int, default=int(os.environ.get("INVARIANT_PLUGIN_CALL_QUEUE_SIZE", "128")))
-    p.add_argument("--run-worker-enabled", dest="run_worker_enabled", action="store_true", help="enable daemon-side agent run queue worker")
-    p.add_argument("--no-run-worker", dest="run_worker_enabled", action="store_false", help="disable daemon-side agent run queue worker")
+    p.add_argument("--run-worker-enabled", dest="run_worker_enabled", action="store_true", help="enable daemon-side run queue worker")
+    p.add_argument("--no-run-worker", dest="run_worker_enabled", action="store_false", help="disable daemon-side run queue worker")
     p.add_argument("--run-worker-id", default=os.environ.get("INVARIANT_RUN_WORKER_ID", ""))
     p.add_argument("--run-worker-lease-seconds", type=int, default=int(os.environ.get("INVARIANT_RUN_WORKER_LEASE_SECONDS", "120")))
     p.add_argument("--run-worker-poll-interval-s", type=float, default=float(os.environ.get("INVARIANT_RUN_WORKER_POLL_INTERVAL_S", "0.5")))
