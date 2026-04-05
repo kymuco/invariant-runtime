@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -160,7 +161,17 @@ class FSAccess:
                 f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp_path, str(p))
+            last_error: PermissionError | None = None
+            for _ in range(10):
+                try:
+                    os.replace(tmp_path, str(p))
+                    tmp_path = None
+                    return
+                except PermissionError as exc:
+                    last_error = exc
+                    time.sleep(0.02)
+            if last_error is not None:
+                raise last_error
         finally:
             if tmp_fd is not None:
                 try:

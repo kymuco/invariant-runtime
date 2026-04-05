@@ -131,3 +131,51 @@ def test_delete_tree_does_not_follow_symlinks(tmp_path: Path):
         pass
 
     assert victim.exists()
+
+
+def test_atomic_write_retries_transient_permission_error(monkeypatch, tmp_path: Path) -> None:
+    fs = FSAccess(root=tmp_path, write=True, delete=True)
+    original_replace = os.replace
+    replace_calls = {"count": 0}
+    sleep_calls: list[float] = []
+
+    def flaky_replace(src: str, dst: str) -> None:
+        replace_calls["count"] += 1
+        if replace_calls["count"] < 3:
+            raise PermissionError("busy")
+        original_replace(src, dst)
+
+    monkeypatch.setattr("invariant.exec.caps.fs.os.replace", flaky_replace)
+    monkeypatch.setattr(
+        "invariant.exec.caps.fs.time.sleep",
+        lambda seconds: sleep_calls.append(seconds),
+    )
+
+    fs.write_text("note.txt", "hello world\n", atomic=True)
+
+    assert (tmp_path / "note.txt").read_text(encoding="utf-8") == "hello world\n"
+    assert replace_calls["count"] == 3
+    assert sleep_calls == [0.02, 0.02]
+
+
+def test_atomic_write_re_raises_after_retry_budget(monkeypatch, tmp_path: Path) -> None:
+    fs = FSAccess(root=tmp_path, write=True, delete=True)
+    replace_calls = {"count": 0}
+    sleep_calls: list[float] = []
+
+    def always_fail(src: str, dst: str) -> None:
+        del src, dst
+        replace_calls["count"] += 1
+        raise PermissionError("still busy")
+
+    monkeypatch.setattr("invariant.exec.caps.fs.os.replace", always_fail)
+    monkeypatch.setattr(
+        "invariant.exec.caps.fs.time.sleep",
+        lambda seconds: sleep_calls.append(seconds),
+    )
+
+    with pytest.raises(PermissionError, match="still busy"):
+        fs.write_text("note.txt", "hello world\n", atomic=True)
+
+    assert replace_calls["count"] == 10
+    assert sleep_calls == [0.02] * 10
