@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from packaging.version import InvalidVersion, Version
+from invariant.spec.versioning import InvalidVersion, Version
 
 _ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._:-]*[a-z0-9])?$", re.IGNORECASE)
 

@@ -4,9 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from packaging.version import InvalidVersion, Version
-
 from invariant.spec.deps import PluginDepsSpec
+from invariant.spec.versioning import InvalidVersion, Version
 
 if TYPE_CHECKING:
     from invariant.spec.meta import PluginMeta
@@ -79,7 +78,7 @@ class PluginManifest:
         except Exception as e:
             raise ValueError("manifest 'priority' must be int-coercible") from e
 
-        # Import lazily to avoid pulling packaging when not needed.
+        # Import lazily to avoid loading metadata construction when it is not needed.
         from invariant.spec.meta import PluginMeta as _PluginMeta
         return _PluginMeta(
             id=self.data["id"],
@@ -95,4 +94,3 @@ class PluginManifest:
             priority=priority,
             # extra=self.data.get("extra", {}),
         )
-

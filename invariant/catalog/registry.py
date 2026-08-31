@@ -9,8 +9,6 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from packaging.version import InvalidVersion, Version
-
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import (
     AmbiguousPluginReference,
@@ -18,7 +16,7 @@ from invariant.spec.errors import (
     PluginNotFoundError,
 )
 from invariant.spec.ids import base_id, canonical_plugin_id, split_id_version
-from invariant.spec.versioning import canon_version_key
+from invariant.spec.versioning import InvalidVersion, Version, canon_version_key
 
 if TYPE_CHECKING:
     from invariant.spec.meta import PluginMeta
