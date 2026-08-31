@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: core / ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and test dependency
+        run: python -m pip install -e ".[test]"
+
+      - name: Run core suite
+        run: python -m pytest -q tests/core
+
+  package:
+    name: package smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Build distributions
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Install wheel without dependencies
+        run: |
+          python -m venv .wheel-smoke
+          .wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
+
+      - name: Smoke import installed wheel
+        run: |
+          cd /tmp
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -c "from invariant.spec.versioning import Version, canon_version_key; from invariant.catalog.registry import PluginRegistry; assert Version('1.0rc1') < Version('1.0'); assert canon_version_key('1.2') == '1.2.0'; print('INVARIANT_WHEEL_OK')"

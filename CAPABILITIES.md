@@ -1,27 +1,28 @@
-# Project Invariant – Capabilities Contract
+# Invariant Runtime — Capabilities Contract
 
-## What is a Capability
+## What is a capability
 
-A capability is a platform-owned, policy-controlled handle to a resource.
-Plugins do NOT register capabilities. Plugins only request them via dependencies.
+A capability is a runtime-owned, policy-controlled handle to a resource.
+Plugins do **not** register capabilities. Plugins request them through runtime dependency wiring.
 
 Capability IDs are namespaced:
 
 - `invariant:capability.<name>`
 
-Capability references MAY be version-pinned:
+Capability references may be version-pinned:
 
 - `invariant:capability.fs_sandbox@0.2.0`
 
-## Security Model (Important)
+## Security model
 
 - In-process plugins are **trusted code**.
-- Capabilities are an **API + policy surface**, not a sandbox security boundary.
-- For untrusted/marketplace plugins, isolation must be provided by a separate runtime layer (process/container + resource limits).
+- Capabilities are an **API + policy surface**, not a complete sandbox security boundary.
+- Isolated plugin workers are process boundaries, but not sufficient hostile-code sandboxes by themselves.
+- Untrusted/marketplace plugins require a stronger external isolation layer with explicit filesystem, network, process, resource, secret, and package-installation controls.
 
-## Availability by Policy / InstanceMode
+## Availability by policy / instance mode
 
-- `MANAGED` runtime: **allowlist only**
+- `MANAGED` runtime: allowlist only
   - `invariant:capability.inspector`
 - Execution-scoped runtimes: policy-gated, configured by `SandboxLimits` and `WorkspaceOptions`.
 
@@ -59,19 +60,19 @@ Configuration source for plugins:
 
 Safe read-only runtime snapshot:
 
-- descriptors list
-- instances list
+- descriptor list
+- instance list
 - dependency graph
-- env info (sandbox/workspace summary)
+- environment summary (sandbox/workspace)
 
-### Optional capabilities (if enabled by policy)
+### Optional capabilities (when enabled by policy)
 
-- `invariant:capability.http` (safe allowlist HTTP client)
-- `invariant:capability.kv`  (simple KV store, persisted in workspace/sandbox)
+- `invariant:capability.http` — allowlist-oriented HTTP client
+- `invariant:capability.kv` — simple KV store persisted in workspace/sandbox
 
 ## Observability: emitted events
 
-Runtime emits structured events for capability operations (best-effort, non-failing):
+Runtime emits structured events for capability operations on a best-effort, non-failing basis, including:
 
 - `cap.fs.read_bytes`, `cap.fs.read_text`
 - `cap.fs.write_bytes`, `cap.fs.write_text`
@@ -82,9 +83,10 @@ Runtime emits structured events for capability operations (best-effort, non-fail
 Each event includes:
 
 - `cap_id`
-- operation-specific fields (e.g., `rel`, `bytes`, `dt_ms`, `ok`, `error_type`, `error`)
+- operation-specific fields such as `rel`, `bytes`, `dt_ms`, `ok`, `error_type`, and `error`
 
 ## Versioning rules
 
-- Capability versions are normalized and compared as pinned strings in strict mode.
-- Contract is forward-compatible only when version changes are explicit.
+- Capability versions use Invariant's concrete-version normalization and ordering.
+- Strict mode requires valid explicit versions.
+- Contract compatibility should be made explicit through version changes; compatibility must not be inferred from an unversioned capability reference.

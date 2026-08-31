@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invariant-runtime"
+version = "0.1.0"
+description = "Policy-aware plugin runtime for versioned discovery, dependency resolution, scoped capabilities, and transactional execution."
+readme = "README.md"
+requires-python = ">=3.13"
+license = "Apache-2.0"
+authors = [
+  { name = "kymuco" },
+]
+keywords = ["plugins", "runtime", "capabilities", "policy", "execution"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+]
+
+[project.urls]
+Repository = "https://github.com/kymuco/invariant-runtime"
+Issues = "https://github.com/kymuco/invariant-runtime/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["invariant*"]
+exclude = ["tests*"]
