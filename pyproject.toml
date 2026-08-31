@@ -37,3 +37,4 @@ Issues = "https://github.com/kymuco/invariant-runtime/issues"
 where = ["."]
 include = ["invariant*"]
 exclude = ["tests*"]
+namespaces = true
