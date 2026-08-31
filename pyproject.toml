@@ -38,3 +38,6 @@ where = ["."]
 include = ["invariant*"]
 exclude = ["tests*"]
 namespaces = true
+
+[tool.setuptools.package-data]
+invariant = ["py.typed"]

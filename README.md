@@ -33,15 +33,61 @@ python -m pytest -q tests/core
 ## Minimal example
 
 ```python
-from invariant.spec.meta import PluginMeta
-from invariant.spec.versioning import Version, canon_version_key
+from invariant import __version__
+from invariant.spec import PluginMeta, Version, canon_version_key
 
 meta = PluginMeta(id="example:hello", version="1.2rc1")
 
 assert Version("1.2rc1") < Version("1.2")
 assert canon_version_key("1.2") == "1.2.0"
-print(meta.id, meta.version)
+print(__version__, meta.id, meta.version)
 ```
+
+## Public import contract
+
+Invariant 0.1 keeps its compatibility surface deliberately narrow.
+
+### Package metadata
+
+```python
+from invariant import __version__
+```
+
+The root package intentionally exposes only distribution metadata. Runtime classes are not re-exported from the root namespace.
+
+### Host-facing API
+
+Use `invariant.api` for the supported host facade:
+
+```python
+from invariant.api import (
+    EphemeralPolicy,
+    PluginService,
+    SandboxLimits,
+    WorkspaceOptions,
+)
+```
+
+This namespace owns the high-level service, policy, profile, and workspace contracts intended for applications embedding Invariant.
+
+### Plugin-author contracts
+
+Use `invariant.spec` for contracts intended to be referenced by plugin implementations:
+
+```python
+from invariant.spec import (
+    BasePlugin,
+    DependencyScope,
+    DependencySpec,
+    PluginContext,
+    PluginMeta,
+    Version,
+)
+```
+
+`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`, and unexported objects inside `invariant.spec`/`invariant.api` remain implementation-level surfaces in the 0.1 line. They are available for advanced integration, but they are not yet covered by the same compatibility promise as the explicit `__all__` facades above.
+
+Invariant ships a `py.typed` marker so type checkers can consume its inline annotations.
 
 ## Architecture
 
