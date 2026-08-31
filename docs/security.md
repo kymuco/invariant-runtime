@@ -1,1 +1,1 @@
-{% include "SECURITY.md" %}
+{{ include_contract("SECURITY.md") }}

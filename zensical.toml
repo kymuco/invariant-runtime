@@ -8,6 +8,10 @@ repo_name = "kymuco/invariant-runtime"
 edit_uri = "edit/main/docs/"
 docs_dir = "docs"
 site_dir = "site"
+watch = [
+  "SECURITY.md",
+  "CAPABILITIES.md",
+]
 copyright = "Invariant Runtime · Apache-2.0"
 extra_css = [
   "stylesheets/invariant.css",
@@ -62,4 +66,4 @@ toggle.name = "Switch to light mode"
 generator = false
 
 [project.markdown_extensions]
-zensical.extensions.macros = { include_dir = "." }
+zensical.extensions.macros = { module_name = "docs_macros", on_error_fail = true, on_undefined = "strict" }

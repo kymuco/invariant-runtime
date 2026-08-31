@@ -32,6 +32,7 @@ def test_documentation_site_config_is_reproducible() -> None:
     assert project["site_name"] == "Invariant Runtime"
     assert project["docs_dir"] == "docs"
     assert project["site_dir"] == "site"
+    assert project["watch"] == ["SECURITY.md", "CAPABILITIES.md"]
     assert project["repo_url"] == "https://github.com/kymuco/invariant-runtime"
     assert project["extra_css"] == ["stylesheets/invariant.css"]
 
@@ -40,6 +41,12 @@ def test_documentation_site_config_is_reproducible() -> None:
     assert theme["font"] is False
     assert "navigation.instant" in theme["features"]
     assert "search.highlight" in theme["features"]
+
+    macros = project["markdown_extensions"]["zensical.extensions.macros"]
+    assert macros["module_name"] == "docs_macros"
+    assert macros["on_error_fail"] is True
+    assert macros["on_undefined"] == "strict"
+    assert "include_dir" not in macros
 
     for target in _nav_targets(project["nav"]):
         if target.startswith(_EXTERNAL_PREFIXES):
@@ -75,8 +82,10 @@ def test_site_markdown_links_stay_inside_docs_root() -> None:
 def test_site_wrappers_keep_root_contracts_canonical() -> None:
     capabilities = (_DOCS_ROOT / "reference" / "capabilities.md").read_text(encoding="utf-8")
     security = (_DOCS_ROOT / "security.md").read_text(encoding="utf-8")
+    macros = (_REPO_ROOT / "docs_macros.py").read_text(encoding="utf-8")
 
-    assert capabilities.strip() == '{% include "CAPABILITIES.md" %}'
-    assert security.strip() == '{% include "SECURITY.md" %}'
+    assert capabilities.strip() == '{{ include_contract("CAPABILITIES.md") }}'
+    assert security.strip() == '{{ include_contract("SECURITY.md") }}'
+    assert 'frozenset({"CAPABILITIES.md", "SECURITY.md"})' in macros
     assert (_REPO_ROOT / "CAPABILITIES.md").is_file()
     assert (_REPO_ROOT / "SECURITY.md").is_file()
