@@ -1,8 +1,8 @@
 # Manifest v1 reference
 
-This page is the reference for `manifest.json` files consumed by the manifest source in Invariant 0.1.
+This page defines `manifest.json` files consumed by Invariant's manifest source in the 0.1 line.
 
-For a tutorial, start with [Getting started](../getting-started.md).
+If you are building a first plugin, start with [Getting started](../getting-started.md). Use this page when you need exact fields, defaults, or validation rules.
 
 ## Minimal strict manifest
 
@@ -18,7 +18,20 @@ For a tutorial, start with [Getting started](../getting-started.md).
 }
 ```
 
-`PluginService.from_manifest_paths(...)` uses strict discovery, so `version` is required for this recommended host path.
+`PluginService.from_manifest_paths(...)` uses strict discovery, so `version` is required on the recommended host path.
+
+## Defaults at a glance
+
+| Field | Default |
+| --- | --- |
+| `maturity` | `stable` |
+| `priority` | `0` |
+| dependency `scope` | `EXECUTION` |
+| dependency `optional` | `false` |
+| `deps.mode` | `none` |
+| `deps.only_binary` | `true` |
+
+Fields not listed as required can be omitted until the plugin needs them.
 
 ## Top-level fields
 
@@ -32,19 +45,17 @@ For a tutorial, start with [Getting started](../getting-started.md).
 | `description` | string or null | no | Human-readable description. |
 | `author` | string or null | no | Author metadata. |
 | `repo` | string or null | no | Repository metadata. |
-| `maturity` | string | no | `experimental`, `beta`, `stable`, or `deprecated`. Defaults to `stable`. |
-| `priority` | integer | no | Plugin priority metadata. Defaults to `0`. |
+| `maturity` | string | no | `experimental`, `beta`, `stable`, or `deprecated`. |
+| `priority` | integer | no | Plugin priority metadata. |
 | `categories` | array of strings | no | Category metadata. |
 | `tags` | array of strings | no | Tag metadata. |
 | `dependencies` | array of objects | no | Invariant plugin or capability dependencies. |
-| `runtime` | object | no | Runtime timeout/config metadata. |
-| `deps` | object | no | Python environment dependency/isolation configuration. |
+| `runtime` | object | no | Runtime timeout and configuration metadata. |
+| `deps` | object | no | Python environment dependency and isolation configuration. |
 
-Unknown top-level fields are not part of Manifest v1 and may fail metadata construction. Prefer only documented fields.
+Unknown top-level fields are rejected because Manifest v1 metadata is constructed from the documented schema. Do not use undocumented extension fields at the top level.
 
 ## `source`
-
-Required fields:
 
 ```json
 {
@@ -59,7 +70,7 @@ Required fields:
 
 A non-empty path relative to the directory containing `manifest.json`.
 
-The resolved source file must exist and must remain under the plugin root; path traversal outside the plugin directory is rejected.
+The resolved source file must exist and remain under the plugin root. Path traversal outside the plugin directory is rejected.
 
 ### `source.class_name`
 
@@ -67,7 +78,7 @@ A non-empty class name found in the source module. The class must inherit from `
 
 ## Plugin dependencies: `dependencies`
 
-`dependencies` describes dependencies on other Invariant plugins or capabilities.
+`dependencies` declares dependencies on other Invariant plugins or capabilities.
 
 ```json
 {
@@ -82,7 +93,7 @@ A non-empty class name found in the source module. The class must inherit from `
 }
 ```
 
-Each object supports:
+Each dependency object supports:
 
 | Field | Type | Required | Default | Meaning |
 | --- | --- | --- | --- | --- |
@@ -92,6 +103,8 @@ Each object supports:
 | `optional` | boolean | no | `false` | Whether missing resolution may yield `None`. |
 
 Dependency parameter names must be unique within a plugin.
+
+`dependencies` is not the place for third-party Python packages. Use `deps` for plugin-environment packages.
 
 ## Runtime metadata: `runtime`
 
@@ -120,7 +133,7 @@ Dependency parameter names must be unique within a plugin.
 }
 ```
 
-Each value must be a positive number or `null`.
+Each timeout must be a positive number or `null`.
 
 For backward compatibility, `call_timeout_s` and `method_timeouts` are also accepted at the top level. If both forms are present, the nested `runtime` value wins.
 
@@ -141,14 +154,16 @@ A manifest can declare the parameter name and prefix used for runtime-provided c
 
 ## Python environment dependencies: `deps`
 
-`deps` is different from `dependencies`.
+`deps` is deliberately separate from `dependencies`:
 
-- `dependencies` connects Invariant plugins and capabilities.
-- `deps` describes third-party Python packages for plugin isolation.
+```text
+dependencies  → other Invariant plugins or capabilities
+deps          → third-party Python packages for an isolated plugin environment
+```
 
 ### No isolated environment
 
-Omit the block, or use:
+Omit `deps`, or write:
 
 ```json
 {
@@ -158,7 +173,7 @@ Omit the block, or use:
 }
 ```
 
-The plugin runs in the core Python environment.
+The plugin runs in the host/core Python environment.
 
 ### Online isolated environment
 
@@ -195,6 +210,8 @@ Optional pip configuration fields:
 
 Both `requirements` and `wheels_dir` are required. Both paths must exist under the plugin root.
 
+Process isolation is dependency and failure separation, not a complete hostile-code sandbox. Read [Security](../../SECURITY.md) before using isolated plugins with untrusted code.
+
 ## Complete example
 
 ```json
@@ -228,21 +245,24 @@ Both `requirements` and `wheels_dir` are required. Both paths must exist under t
 }
 ```
 
-## Validation and discovery behavior
+## Validation and discovery
 
-Manifest discovery validates structural fields before registration. In particular:
+Manifest discovery validates structure before registration. In particular:
 
 - `manifest_version` must be supported;
 - `id`, `source.code_path`, and `source.class_name` must be non-empty;
+- strict discovery requires an explicit plugin version;
 - source and dependency paths must stay under the plugin root;
-- malformed timeout/config blocks fail discovery;
+- malformed timeout or configuration blocks fail discovery;
 - malformed Python isolation metadata fails discovery;
+- unknown top-level metadata fields are rejected;
 - non-stable plugins are skipped unless the host opts into unstable discovery.
 
-The recommended host constructor defaults to `fail_fast=True`, making malformed manifests visible immediately during startup.
+The recommended host constructor defaults to `fail_fast=True`, so malformed manifests are surfaced during startup instead of being silently ignored.
 
 ## See also
 
+- [Getting started](../getting-started.md)
 - [Plugin authoring](../guides/plugin-authoring.md)
 - [Runtime model](../concepts/runtime-model.md)
 - [Capabilities](../../CAPABILITIES.md)

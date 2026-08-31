@@ -2,18 +2,18 @@
 
 **A small, policy-aware plugin runtime for Python.**
 
-Invariant gives applications a neutral runtime for discovering versioned plugins, resolving dependencies, controlling capabilities, and managing lifecycle without tying the host to a product framework.
+Invariant lets a Python application discover versioned plugins, resolve dependencies, govern host capabilities, and own plugin lifecycle without pulling product behavior into the runtime.
 
 - **Zero mandatory runtime dependencies** — production code uses only the Python standard library.
-- **Explicit boundaries** — plugins declare identity, version, dependencies, and runtime metadata.
-- **Governed execution** — capabilities are exposed through policy-controlled interfaces.
-- **Deterministic lifecycle** — activation, rollback, shutdown, and version selection are runtime concerns.
+- **Explicit contracts** — plugins declare identity, version, dependencies, and source metadata.
+- **Governed host access** — capabilities are exposed through policy-controlled interfaces.
+- **Deterministic lifecycle** — discovery, version selection, activation, rollback, and shutdown are runtime concerns.
 
-> Invariant is infrastructure, not an application framework. Domain behavior, agents, companions, workflows, and marketplace policy belong outside the runtime.
+> Invariant is infrastructure, not an application framework. Domain behavior, agents, companions, workflows, marketplace logic, and product UX belong outside the runtime.
 
-## Start here
+## Try it
 
-If you want to see Invariant work, run the checked example plugin:
+From the repository root:
 
 ```bash
 python -m pip install -e ".[test]"
@@ -26,7 +26,7 @@ Expected output:
 Hello, Invariant!
 ```
 
-The host uses only the public API:
+The host-facing path is intentionally small:
 
 ```python
 from invariant.api import PluginService
@@ -39,69 +39,40 @@ finally:
     service.close()
 ```
 
-The plugin itself imports only plugin-author contracts:
+Build the same plugin from an empty directory in **[Getting started](docs/getting-started.md)**.
 
-```python
-from invariant.spec import BasePlugin
+## Where to go next
 
-
-class HelloPlugin(BasePlugin):
-    def initialize(self, **deps) -> None:
-        pass
-
-    def shutdown(self) -> None:
-        pass
-
-    def greet(self, name: str) -> str:
-        return f"Hello, {name}!"
-```
-
-Read **[Getting started](docs/getting-started.md)** to build the same plugin from an empty directory.
-
-## Documentation
-
-Choose the shortest path for what you are trying to do:
-
-| Goal | Start here |
+| Goal | Read |
 | --- | --- |
-| Run your first plugin | [Getting started](docs/getting-started.md) |
-| Understand the runtime | [Runtime model](docs/concepts/runtime-model.md) |
-| Write production plugins | [Plugin authoring guide](docs/guides/plugin-authoring.md) |
+| Build your first plugin | [Getting started](docs/getting-started.md) |
+| Understand the mental model | [Runtime model](docs/concepts/runtime-model.md) |
+| Design a production plugin | [Plugin authoring](docs/guides/plugin-authoring.md) |
 | Embed Invariant in an application | [Public API](docs/reference/public-api.md) |
-| Define a manifest | [Manifest v1 reference](docs/reference/manifest-v1.md) |
-| Understand capabilities | [Capabilities contract](CAPABILITIES.md) |
+| Define or validate a manifest | [Manifest v1](docs/reference/manifest-v1.md) |
+| Work with host resources | [Capabilities](CAPABILITIES.md) |
 | Understand trust and isolation | [Security](SECURITY.md) |
-| Work on Invariant itself | [Core architecture](docs/core.md) |
+| Modify the runtime itself | [Core architecture](docs/core.md) |
 
-See the **[documentation home](docs/index.md)** for the complete map.
+The **[documentation home](docs/index.md)** contains the complete map.
 
-## Public compatibility surface
+## Public surface
 
-Invariant 0.1 keeps its supported import surface intentionally narrow.
-
-### Package metadata
+Invariant 0.1 deliberately keeps the supported import surface narrow:
 
 ```python
-from invariant import __version__
+from invariant import __version__       # package metadata
+from invariant.api import PluginService  # host-facing API
+from invariant.spec import BasePlugin    # plugin-author API
 ```
 
-### Host-facing API
+Application code should prefer `invariant.api`. Plugin code should prefer `invariant.spec`.
 
-```python
-from invariant.api import PluginService, SandboxLimits, WorkspaceOptions
-```
+`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`, and unexported objects inside the public packages remain implementation-level surfaces in the 0.1 line. See the [Public API reference](docs/reference/public-api.md) for the complete compatibility contract.
 
-### Plugin-author API
+Invariant also ships a `py.typed` marker for PEP 561 inline typing support.
 
-```python
-from invariant.spec import BasePlugin, DependencySpec, PluginMeta, Version
-```
-
-`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`, and unexported objects inside `invariant.api` or `invariant.spec` remain implementation-level surfaces in the 0.1 line. They may evolve without the same compatibility promise as the explicit public facades.
-
-Invariant ships a `py.typed` marker for PEP 561 inline typing support.
-
-## Architecture
+## Runtime model
 
 ```text
 manifest / source
@@ -110,7 +81,7 @@ manifest / source
    discovery
        │
        ▼
-versioned registry
+version selection
        │
        ▼
 dependency resolution
@@ -125,46 +96,23 @@ policy-scoped capabilities
 commit · rollback · shutdown
 ```
 
-The implementation is split into six layers:
-
-```text
-invariant/
-├── spec/       plugin-facing contracts, IDs, metadata, versions
-├── load/       discovery, source loading, isolated plugin environments
-├── catalog/    descriptor registry and version selection
-├── exec/       lifecycle, dependency wiring, transactions, capabilities
-├── api/        supported host-facing facade
-└── ops/        host, daemon, supervision, tracing, metrics
-```
+The public host API keeps these internal layers behind `PluginService`. Read the [Runtime model](docs/concepts/runtime-model.md) when you need the details.
 
 ## Security boundary
 
 Capabilities are an **API and policy boundary**, not a complete hostile-code sandbox.
 
-In-process plugins are trusted code. Isolated plugin processes reduce coupling and failure propagation, but untrusted or marketplace code requires a stronger external isolation layer with explicit filesystem, network, resource, process, and secret controls.
+In-process plugins are trusted code. Isolated plugin processes provide dependency and failure separation, but hostile or marketplace code requires stronger external isolation with explicit filesystem, network, resource, process, and secret controls.
 
 Read [SECURITY.md](SECURITY.md) before designing an untrusted-plugin system.
 
-## Runtime dependency contract
-
-Production code under `invariant/` may import only:
-
-1. Python standard-library modules, and
-2. other `invariant` modules.
-
-The core suite contains an AST regression that enforces this rule.
-
-## Project status
+## Status
 
 Invariant Runtime is currently **0.1.0 / alpha**.
 
 `ManifestSource` and `FilesystemSource` are implemented. `EntrypointSource`, `ZipSource`, and `RemoteSource` are incomplete and are not presented as production-ready discovery backends.
 
-## History
-
-Invariant originated inside **Project Invariant** on January 31, 2026 as the reusable runtime beneath the first product built on the plugin system. In March 2026 the core was separated from product-specific agent contracts and reused by **Character_OS**, then by **Runplane**.
-
-In August 2026 those surviving runtime lineages were reconciled into this standalone canonical repository. Historical commits are preserved intentionally so the repository reflects that evolution rather than presenting the runtime as a one-shot import.
+Invariant originated inside **Project Invariant** on January 31, 2026, was later reused by **Character_OS** and **Runplane**, and was reconciled into this standalone canonical repository in August 2026. Historical commits are preserved intentionally.
 
 ## License
 

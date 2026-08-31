@@ -1,6 +1,17 @@
 # Documentation standard
 
-Invariant documentation is part of the product surface. It should be reviewed with the same care as public API.
+Invariant documentation is part of the product surface. Review it with the same care as public API.
+
+## Product test: the first 30 seconds
+
+A first-time reader landing on the repository should be able to answer four questions quickly:
+
+1. What is Invariant?
+2. What problem does it solve?
+3. Where do I start?
+4. What security boundary should I not misunderstand?
+
+If the front page makes the reader study internal architecture before answering those questions, the documentation is too expensive to enter.
 
 ## Principles
 
@@ -26,9 +37,23 @@ over a tour of every subsystem.
 
 Introduce advanced features only when they become relevant.
 
-The first plugin does not need Python isolation, capability internals, version epochs, or every dependency scope explained inline. Link to the deeper page instead.
+The first plugin does not need Python isolation, capability internals, version epochs, every dependency scope, or registry construction explained inline. Link to the deeper page instead.
 
-### 4. Keep concepts separate
+### 4. Write for scanning
+
+Readers rarely consume technical documentation linearly on the first pass.
+
+Use:
+
+- descriptive headings;
+- short paragraphs;
+- tables for stable field/API facts;
+- code blocks for exact syntax;
+- lists only when the items are genuinely parallel.
+
+A reader should be able to recover the structure of a page from its headings alone.
+
+### 5. Keep concepts separate
 
 Use one term for one idea.
 
@@ -39,7 +64,9 @@ In particular:
 - **capability** means a runtime-owned policy/API handle;
 - **isolation** does not automatically mean hostile-code sandboxing.
 
-### 5. Prefer public imports in user-facing examples
+Do not introduce an internal implementation term as a core user concept unless the user must make a decision about it.
+
+### 6. Prefer public imports in user-facing examples
 
 Tutorials and ordinary guides should use:
 
@@ -50,28 +77,33 @@ invariant.spec
 
 Do not teach implementation-level imports unless the page is explicitly for advanced integration or runtime development.
 
-### 6. State security boundaries directly
+### 7. State security boundaries directly
 
 Do not use wording that could imply stronger isolation than the runtime provides.
 
-Whenever a feature touches filesystem, network, processes, secrets, or untrusted code, make the trust assumption explicit and link to `SECURITY.md` when relevant.
+Whenever a feature touches filesystem, network, processes, secrets, package installation, or untrusted code, state the relevant trust assumption and link to `SECURITY.md` when useful.
 
-### 7. Show expected results
+### 8. Show expected results
 
 Commands should include the important expected output when that output helps the reader know they succeeded.
 
-### 8. Make examples executable
+For a first-run tutorial, success must be visually obvious.
+
+### 9. Make examples executable and canonical
 
 Repository examples are test fixtures, not decorative snippets.
 
 When a public workflow changes, update the example and its regression test in the same change.
 
-### 9. Keep reference normative and guides explanatory
+Tutorial snippets that claim to reproduce a checked example should stay synchronized with the checked files rather than becoming a second hand-maintained implementation.
 
-Reference pages answer questions such as:
+### 10. Keep reference normative and guides explanatory
 
-- What fields exist?
+Reference pages answer:
+
+- What exists?
 - What type is accepted?
+- What is required?
 - What is the default?
 - What is supported?
 
@@ -81,11 +113,19 @@ Guides answer:
 - Why should I choose this approach?
 - What mistakes should I avoid?
 
-Do not mix the two until both become harder to use.
+Do not make readers extract normative facts from narrative prose when a compact table is clearer.
 
-### 10. Earn every sentence
+### 11. Keep the README a front door
 
-Prefer direct, precise language. Remove repeated claims, marketing filler, and implementation trivia that does not help the reader make a decision or complete a task.
+The repository README should explain the product, prove the first useful path, route readers to the correct depth, state the security boundary, and communicate project status.
+
+It should not duplicate the full API reference, manifest reference, or contributor architecture guide.
+
+### 12. Earn every sentence
+
+Prefer direct, precise language. Remove repeated claims, marketing filler, unnecessary adjectives, and implementation trivia that does not help the reader make a decision or complete a task.
+
+Simplicity is not the absence of detail. It is placing detail at the depth where it becomes useful.
 
 ## Page structure
 
@@ -98,13 +138,20 @@ A task-oriented page should usually contain:
 5. a concise explanation of what happened;
 6. links to the next layer of detail.
 
+A concept page should usually contain:
+
+1. the smallest mental model that explains the subject;
+2. public concepts before internal machinery;
+3. one concrete example for each important concept;
+4. deeper implementation detail only after the model is established.
+
 A reference page should usually contain:
 
 1. scope and version;
 2. minimal form;
-3. field/API tables;
+3. compact field/API tables;
 4. constraints and defaults;
-5. complete example;
+5. complete example when useful;
 6. related reference links.
 
 ## Review checklist
@@ -112,10 +159,13 @@ A reference page should usually contain:
 Before merging documentation, ask:
 
 - Can a first-time reader tell what this page is for in the first paragraph?
+- Can the page be understood by scanning headings before reading every paragraph?
 - Is there an unnecessary concept before the first useful action?
 - Do examples use supported public imports?
 - Are defaults, constraints, and security assumptions explicit?
 - Are relative links valid?
-- Does the example still execute against the current runtime?
+- Does the checked example still execute against the current runtime?
+- Are tutorial snippets synchronized with their canonical example files?
 - Does the page distinguish current capability from future intent?
+- Is the README routing readers instead of duplicating deeper reference material?
 - Can any sentence be removed without losing useful information?

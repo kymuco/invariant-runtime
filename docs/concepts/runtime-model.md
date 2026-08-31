@@ -1,6 +1,8 @@
 # Runtime model
 
-Invariant is easier to understand if you keep five concepts separate: **plugin**, **manifest**, **registry**, **service**, and **capability**.
+You only need four ideas to use Invariant well: **plugin**, **manifest**, **service**, and **capability**.
+
+The loader, registry, resolver, and execution runtime still exist, but ordinary application and plugin code should not need to assemble them directly.
 
 ## 1. Plugin
 
@@ -18,13 +20,13 @@ class ExamplePlugin(BasePlugin):
         ...
 ```
 
-The plugin owns domain behavior. The runtime owns activation, dependency wiring, and shutdown.
+The plugin owns domain behavior. Invariant owns runtime lifecycle around that behavior.
 
 ## 2. Manifest
 
-A manifest describes a plugin without requiring the host to import its code during ordinary discovery.
+A manifest describes a plugin before the host needs to activate it.
 
-At minimum, a strict manifest-based plugin declares:
+A minimal strict manifest is:
 
 ```json
 {
@@ -38,25 +40,15 @@ At minimum, a strict manifest-based plugin declares:
 }
 ```
 
-The manifest is metadata and runtime configuration. It is not executable policy.
+The manifest carries identity, version, source location, and optional runtime metadata. It is declarative data, not executable policy.
 
 See [Manifest v1](../reference/manifest-v1.md).
 
-## 3. Registry
-
-Internally, discovered descriptors enter a versioned registry. The registry answers questions such as:
-
-- which versions of a plugin exist;
-- which concrete version matches `example:plugin`;
-- whether a pinned version such as `example:plugin@1.2.0` exists.
-
-The registry is an implementation layer in Invariant 0.1. Applications normally reach it through `PluginService` rather than importing registry machinery directly.
-
-## 4. Service
+## 3. Service
 
 `PluginService` is the supported host-facing facade.
 
-For manifest plugins, the recommended constructor is:
+For manifest plugins:
 
 ```python
 from invariant.api import PluginService
@@ -64,48 +56,69 @@ from invariant.api import PluginService
 service = PluginService.from_manifest_paths(["plugins"])
 ```
 
-A managed plugin can then be requested by ID:
+Request a managed plugin by ID:
 
 ```python
 plugin = service.get("example:plugin")
 ```
 
-The service coordinates the runtime layers behind that call.
+Close the service when the host shuts down:
 
-## 5. Capability
+```python
+service.close()
+```
 
-A capability is a runtime-owned handle to a host resource.
+The service owns the runtime machinery behind those operations.
+
+## 4. Capability
+
+A capability is a runtime-owned, policy-controlled handle to a host resource.
 
 Examples include filesystem access, configuration, HTTP, KV storage, workspace access, and runtime inspection.
 
-A capability is **not** the same thing as permission to execute arbitrary host code. Capabilities define an API and policy surface. They are one part of the trust model, not a complete sandbox.
+Capabilities let a host govern access through explicit interfaces. They are **not** a complete sandbox for hostile Python code.
 
 See [Capabilities](../../CAPABILITIES.md) and [Security](../../SECURITY.md).
 
-## Lifecycle
+## What happens behind the service
 
-A normal managed activation looks like this:
+You do not need these layers to write a first plugin, but they explain the runtime:
 
 ```text
-PluginService.get(plugin_id)
-        │
-        ▼
-resolve versioned descriptor
-        │
-        ▼
-resolve declared dependencies
-        │
-        ▼
-construct plugin instance
-        │
-        ▼
+manifest / source
+       │
+       ▼
+   discovery
+       │
+       ▼
+versioned registry
+       │
+       ▼
+dependency resolution
+       │
+       ▼
+plugin construction
+       │
+       ▼
 initialize(resolved_dependencies)
-        │
-        ▼
+       │
+       ▼
 active plugin
 ```
 
-If activation cannot complete, the runtime is responsible for containment and rollback of runtime-owned lifecycle state.
+The internal responsibilities stay separate:
+
+- discovery finds plugin descriptions;
+- the registry owns concrete version selection;
+- the resolver builds dependency relationships;
+- the execution runtime owns activation and cleanup;
+- `PluginService` presents the supported host-facing facade.
+
+This separation is useful for contributors and advanced integrations, but it is intentionally hidden from the ordinary onboarding path.
+
+## Lifecycle
+
+For a managed plugin, `service.get(...)` activates the plugin on first use and returns the runtime-owned managed instance.
 
 On shutdown:
 
@@ -119,51 +132,65 @@ shutdown active managed plugins
 release runtime-owned state
 ```
 
-## Managed, execution, and workspace scopes
+If activation fails, Invariant contains and rolls back runtime-owned lifecycle state where the execution model supports it. Arbitrary external side effects performed by plugin code are not automatically transactional.
 
-Invariant supports multiple lifetime shapes.
+## Lifetime shapes
+
+Invariant supports three common host-facing shapes.
 
 ### Managed
 
-`service.get(...)` provides the managed singleton path. Use it when a plugin should be owned by the service for the host lifetime.
+```python
+plugin = service.get("example:plugin")
+```
+
+Use this when the service should own one managed instance for the host lifetime.
 
 ### Execution scoped
 
-`service.execution(...)` creates an execution context with a supplied policy and isolated runtime state for that execution.
+```python
+context = service.execution(policy=policy)
+```
+
+Use an execution context when a unit of work needs its own policy and runtime-owned state.
 
 ### Workspace scoped
 
-`service.workspace(...)` creates an execution context bound to a persistent workspace root.
+```python
+context = service.workspace("workspace-id")
+```
 
-These are runtime ownership models, not business-workflow concepts.
+Use a workspace context when execution also needs a persistent workspace root.
+
+These are ownership and lifetime models, not business-workflow concepts.
 
 ## Version selection
 
-Manifest-first hosts run in strict mode: plugins declare explicit versions.
+Manifest-first hosts use strict discovery: every discovered plugin declares an explicit version.
 
-A reference can be concrete:
+Pin a concrete version when you need it:
 
 ```text
 example:plugin@1.2.0
 ```
 
-or select the highest registered non-local version:
+Or let the registry select the highest registered non-local version:
 
 ```text
 example:plugin
 example:plugin@latest
 ```
 
-Invariant owns concrete version parsing and ordering. See the [public API reference](../reference/public-api.md) for the supported `Version` contract.
+Invariant owns concrete version parsing and ordering. See the [Public API reference](../reference/public-api.md) for the supported `Version` contract.
 
 ## Trust boundary
 
-The most important boundary is this:
+Keep this distinction explicit:
 
 ```text
 policy-governed capability ≠ hostile-code sandbox
 ```
 
-In-process plugins are trusted. Isolated plugin processes provide dependency and failure separation, but stronger external isolation is required for hostile or marketplace code.
+In-process plugins are trusted code. Isolated plugin workers provide dependency and failure separation, but hostile or marketplace code requires stronger external isolation.
 
 Read [Security](../../SECURITY.md) before designing an untrusted-plugin system.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -18,6 +19,14 @@ def _markdown_files() -> list[Path]:
     files.extend(sorted((_REPO_ROOT / "docs").rglob("*.md")))
     files.extend(sorted((_REPO_ROOT / "examples").rglob("*.md")))
     return files
+
+
+def _fenced_block_after(text: str, marker: str) -> str:
+    marker_pos = text.index(marker)
+    fence_pos = text.index("```", marker_pos)
+    content_start = text.index("\n", fence_pos) + 1
+    content_end = text.index("\n```", content_start)
+    return text[content_start:content_end].strip()
 
 
 def test_documentation_relative_links_resolve() -> None:
@@ -63,3 +72,20 @@ def test_checked_example_keeps_public_import_boundaries() -> None:
     assert "invariant.catalog" not in host_source
     assert "invariant.exec" not in host_source
     assert "invariant.ops" not in host_source
+
+
+def test_getting_started_snippets_match_checked_example() -> None:
+    page = (_REPO_ROOT / "docs" / "getting-started.md").read_text(encoding="utf-8")
+    example_root = _REPO_ROOT / "examples" / "hello_plugin"
+
+    expected = {
+        "Create `hello_plugin/plugin.py`:": example_root / "plugin.py",
+        "Create `hello_plugin/manifest.json`:": example_root / "manifest.json",
+        "Create `hello_plugin/run.py`:": example_root / "run.py",
+    }
+
+    for marker, path in expected.items():
+        assert _fenced_block_after(page, marker) == path.read_text(encoding="utf-8").strip()
+
+    manifest = json.loads((example_root / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest) == {"manifest_version", "id", "version", "source"}

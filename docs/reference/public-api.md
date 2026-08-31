@@ -1,48 +1,50 @@
 # Public API reference
 
-Invariant 0.1 defines a deliberately narrow compatibility surface.
+Invariant 0.1 keeps its supported compatibility surface deliberately narrow so host and plugin code have clear imports while internal runtime layers can still evolve.
 
-The goal is simple: application and plugin code should have clear supported imports while the runtime remains free to evolve its internal implementation.
+## Stability level
+
+This is an **alpha / 0.x compatibility contract**, not a 1.0 stability guarantee.
+
+Public facade changes should be intentional and reviewed as compatibility changes. Internal modules may evolve more quickly.
 
 ## Package metadata
 
-### `invariant.__version__`
+| Symbol | Purpose |
+| --- | --- |
+| `invariant.__version__` | Installed `invariant-runtime` distribution version. |
 
 ```python
 from invariant import __version__
 ```
 
-Returns the installed `invariant-runtime` distribution version.
-
 The root package intentionally does not re-export runtime classes.
 
 ## Host-facing API: `invariant.api`
 
-Use this namespace from applications embedding Invariant.
+Applications embedding Invariant should import from `invariant.api`.
+
+| Export | Purpose |
+| --- | --- |
+| `PluginService` | High-level host facade for plugin activation and scoped execution. |
+| `BasePolicy` | Base policy contract. |
+| `ManagedPolicy` | Policy for managed service-owned plugin instances. |
+| `EphemeralPolicy` | Policy for execution-scoped runtime state. |
+| `SandboxLimits` | Capability and resource limits for governed execution. |
+| `WorkspaceOptions` | Persistent workspace limits and path configuration. |
+| `PolicyProfile` | Named policy profile type. |
+| `normalize_profile` | Normalize a profile name. |
+| `profile_from_env` | Resolve a profile from environment configuration. |
+| `sandbox_limits_for_profile` | Build limits for a named profile. |
+| `ephemeral_policy_for_profile` | Build an ephemeral policy for a named profile. |
+
+### `PluginService.from_manifest_paths(...)`
+
+Recommended constructor for manifest-based hosts:
 
 ```python
-from invariant.api import (
-    BasePolicy,
-    EphemeralPolicy,
-    ManagedPolicy,
-    PluginService,
-    PolicyProfile,
-    SandboxLimits,
-    WorkspaceOptions,
-    ephemeral_policy_for_profile,
-    normalize_profile,
-    profile_from_env,
-    sandbox_limits_for_profile,
-)
-```
+from invariant.api import PluginService
 
-### `PluginService`
-
-High-level host facade for plugin activation and execution contexts.
-
-#### `PluginService.from_manifest_paths(...)`
-
-```python
 service = PluginService.from_manifest_paths(
     ["plugins"],
     include_unstable=False,
@@ -50,110 +52,90 @@ service = PluginService.from_manifest_paths(
 )
 ```
 
-Recommended entry point for manifest-based hosts.
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `search_paths` | required | One or more directories recursively searched for `manifest.json`. |
+| `include_unstable` | `False` | Include plugins whose maturity is not `stable`. |
+| `fail_fast` | `True` | Raise on discovery errors instead of logging and skipping them. |
+| `tracer` | `None` | Optional runtime tracer integration. |
 
-Parameters:
+Discovery is strict: every discovered manifest plugin must declare an explicit version.
 
-- `search_paths` — one or more directories recursively searched for `manifest.json`;
-- `include_unstable` — include plugins whose maturity is not `stable`;
-- `fail_fast` — raise on malformed manifest/source discovery instead of logging and skipping it;
-- `tracer` — optional runtime tracer integration.
-
-This constructor uses strict versioned discovery. Every discovered manifest plugin must declare an explicit version.
-
-#### `service.get(plugin_id)`
+### `service.get(plugin_id)`
 
 Returns a managed plugin instance.
 
 ```python
 plugin = service.get("example:hello")
-```
-
-A reference may include a concrete version:
-
-```python
 plugin = service.get("example:hello@1.0.0")
 ```
 
-#### `service.shutdown(plugin_id)`
+An unpinned ID selects the highest registered non-local concrete version.
 
-Shuts down one managed plugin and removes the runtime-owned managed instance.
+### `service.shutdown(plugin_id)`
 
-#### `service.close()`
+Shuts down one managed plugin and removes its runtime-owned managed instance.
 
-Best-effort shutdown of service-owned managed runtime state.
+### `service.close()`
 
-Hosts should call this during application shutdown.
+Performs best-effort shutdown of service-owned managed runtime state. Hosts should call it during application shutdown.
 
-#### `service.execution(...)`
+### `service.execution(...)`
 
-Creates an execution-scoped `ExecutionContext` using an explicit policy.
+Creates an execution-scoped context using an explicit policy and execution-owned runtime state.
 
-#### `service.workspace(...)`
+### `service.workspace(...)`
 
 Creates an execution context bound to a persistent workspace ID.
 
-### Policies and limits
-
-`ManagedPolicy`, `EphemeralPolicy`, `SandboxLimits`, profile helpers, and `WorkspaceOptions` are host-facing configuration contracts.
-
-For security semantics, read [SECURITY.md](../../SECURITY.md) and the [Capabilities contract](../../CAPABILITIES.md).
+For policy and capability semantics, read [Security](../../SECURITY.md) and [Capabilities](../../CAPABILITIES.md).
 
 ## Plugin-author API: `invariant.spec`
 
-Use this namespace from plugin implementations and plugin-side tooling.
+Plugin implementations and plugin-side tooling should import from `invariant.spec`.
 
-```python
-from invariant.spec import (
-    BasePlugin,
-    DependencyScope,
-    DependencySpec,
-    InvalidVersion,
-    PluginContext,
-    PluginMeta,
-    Version,
-    canon_version_key,
-)
-```
+| Export | Purpose |
+| --- | --- |
+| `BasePlugin` | Base lifecycle contract for concrete plugins. |
+| `PluginContext` | Protocol for runtime-provided plugin context information. |
+| `PluginMeta` | Immutable plugin metadata. |
+| `DependencySpec` | Declarative plugin/capability dependency. |
+| `DependencyScope` | Dependency lifetime enum. |
+| `Version` | Invariant-owned concrete version parser and comparator. |
+| `InvalidVersion` | Error raised for invalid concrete versions. |
+| `canon_version_key` | Normalize a concrete version to its registry key. |
 
 ### `BasePlugin`
 
-Base lifecycle contract for concrete plugins.
-
-Required methods:
+Concrete plugins implement:
 
 - `initialize(**deps)`
 - `shutdown()`
 
+See [Plugin authoring](../guides/plugin-authoring.md) for lifecycle guidance.
+
 ### `PluginMeta`
 
-Immutable plugin metadata including ID, version, dependencies, categories, tags, author, maturity, repository metadata, and priority.
+Immutable metadata including ID, version, dependencies, categories, tags, author, maturity, repository metadata, and priority.
 
-### `DependencySpec`
+Manifest-based plugins normally declare these fields in `manifest.json` rather than constructing `PluginMeta` directly.
 
-Declarative dependency contract containing:
+### `DependencySpec` and `DependencyScope`
+
+A dependency declares:
 
 - `id`
 - `param`
 - `scope`
 - `optional`
 
-### `DependencyScope`
-
-Supported values:
-
-- `SINGLETON`
-- `EXECUTION`
-- `PLUGIN`
-- `TRANSIENT`
+Available scopes are `SINGLETON`, `EXECUTION`, `PLUGIN`, and `TRANSIENT`.
 
 ### `PluginContext`
 
-Protocol for runtime-provided plugin context information such as runtime ID, configuration mapping, and event emission.
+Protocol for runtime-provided context information such as runtime ID, configuration mapping, and event emission.
 
 ### `Version`
-
-Invariant-owned concrete version parser and comparator.
 
 ```python
 from invariant.spec import Version
@@ -163,8 +145,6 @@ assert Version("1.0rc1") < Version("1.0")
 
 ### `canon_version_key(...)`
 
-Returns the normalized registry key for a concrete version.
-
 ```python
 from invariant.spec import canon_version_key
 
@@ -173,7 +153,7 @@ assert canon_version_key("1.2") == "1.2.0"
 
 ## Implementation-level modules
 
-The following are not part of the explicit 0.1 compatibility facade:
+These modules are **not** part of the explicit 0.1 compatibility facade:
 
 ```text
 invariant.catalog
@@ -182,26 +162,20 @@ invariant.exec
 invariant.ops
 ```
 
-Unexported objects inside `invariant.api` and `invariant.spec` are also implementation-level unless documented otherwise.
+Unexported objects inside `invariant.api` and `invariant.spec` are also implementation-level unless a future compatibility contract says otherwise.
 
-Advanced users can inspect these modules, but code that imports them directly accepts a higher compatibility risk during the 0.x line.
+Advanced integrations may inspect or use those modules, but direct imports accept a higher compatibility risk during the 0.x line.
 
 ## Typing
 
-Invariant ships a `py.typed` marker and uses inline Python type annotations. Type checkers can consume the installed package directly.
+Invariant ships a `py.typed` marker and inline Python annotations. Type checkers can consume the installed package directly.
 
-## Compatibility policy for 0.x
+## Compatibility rules for 0.x
 
-The public facades above are the surfaces Invariant intentionally treats as supported API.
-
-During the 0.x line:
-
-- internal modules may evolve more quickly;
-- public facade changes should be intentional and reviewed as compatibility changes;
-- new public exports should not be added casually;
-- removal or semantic changes to existing public exports should be called out explicitly in release notes.
-
-This is an alpha compatibility contract, not a 1.0 stability guarantee.
+- new public exports should be added deliberately;
+- removal or semantic changes to an existing public export should be called out in release notes;
+- implementation-level modules may change without the same compatibility promise;
+- examples and ordinary guides should use the public facades unless they are explicitly documenting internals.
 
 ## See also
 

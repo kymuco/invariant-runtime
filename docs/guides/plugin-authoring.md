@@ -1,29 +1,26 @@
 # Plugin authoring
 
-This guide covers the contracts a plugin author is expected to depend on in Invariant 0.1.
+Use this guide after [Getting started](../getting-started.md) when your plugin needs to grow beyond the minimal example.
 
-If you have not run a plugin yet, start with [Getting started](../getting-started.md).
+The guiding rule is simple: keep plugin behavior ordinary Python, and let Invariant own lifecycle, dependency wiring, version selection, and policy-governed host access.
 
-## Import from `invariant.spec`
+## Use the plugin-author API
 
-Plugin code should prefer the supported plugin-author facade:
+Plugin code should import supported contracts from `invariant.spec`.
+
+Start with only what the plugin needs:
 
 ```python
-from invariant.spec import (
-    BasePlugin,
-    DependencyScope,
-    DependencySpec,
-    PluginContext,
-    PluginMeta,
-    Version,
-)
+from invariant.spec import BasePlugin
 ```
 
-Avoid building plugin code against `invariant.load`, `invariant.catalog`, `invariant.exec`, or `invariant.ops`. Those are implementation-level surfaces in the 0.1 line.
+Add contracts such as `DependencySpec`, `DependencyScope`, `PluginContext`, `PluginMeta`, or `Version` only when the code actually uses them.
 
-## Implement a small lifecycle
+Avoid coupling ordinary plugin code to `invariant.load`, `invariant.catalog`, `invariant.exec`, or `invariant.ops`. Those remain implementation-level surfaces in the 0.1 line.
 
-Every concrete `BasePlugin` implements two lifecycle methods:
+## Keep construction lightweight
+
+A concrete plugin implements two lifecycle methods:
 
 ```python
 from invariant.spec import BasePlugin
@@ -41,17 +38,17 @@ class CachePlugin(BasePlugin):
 
 Use `initialize(...)` to accept resolved dependencies and prepare runtime state.
 
-Keep construction lightweight. The runtime may instantiate the class before dependencies are wired; initialization is the lifecycle point for becoming usable.
+Do not depend on constructor-time access to runtime dependencies. The runtime may instantiate the class before dependency wiring is complete.
 
 ### `shutdown()`
 
-Release resources owned by the plugin. Make shutdown safe to call as part of runtime cleanup.
+Release resources owned by the plugin. Make cleanup predictable and safe to call during runtime shutdown.
 
 A plugin should not rely on process exit as its only cleanup strategy.
 
 ## Put domain behavior on ordinary methods
 
-Invariant does not prescribe your business API.
+Invariant does not prescribe the business API of a plugin.
 
 ```python
 class GreeterPlugin(BasePlugin):
@@ -65,11 +62,27 @@ class GreeterPlugin(BasePlugin):
         return f"Hello, {name}!"
 ```
 
-The runtime governs lifecycle and dependencies; your plugin defines the behavior meaningful to its host.
+The runtime governs the plugin around these methods; the methods themselves remain ordinary Python.
 
-## Give every manifest plugin an explicit version
+## Give the plugin a durable identity
 
-The recommended manifest-first host path runs in strict mode. Declare a concrete version:
+A useful ID convention is:
+
+```text
+<owner-or-domain>:<plugin-name>
+```
+
+Examples:
+
+```text
+acme:storage
+acme:search
+example:hello
+```
+
+Plugin IDs are canonicalized case-insensitively and should be treated as durable identities. Changing the ID creates a different plugin identity; use versions to evolve an existing one.
+
+For the recommended manifest-first host path, declare an explicit concrete version:
 
 ```json
 {
@@ -83,9 +96,7 @@ The recommended manifest-first host path runs in strict mode. Declare a concrete
 }
 ```
 
-Invariant normalizes and compares concrete versions deterministically. `1`, `1.0`, and `1.0.0` compare as the same release, while registry keys are normalized to at least three release components.
-
-Use `Version` when plugin-side tooling needs the same concrete-version semantics:
+Invariant compares concrete versions deterministically. If tooling needs the same semantics:
 
 ```python
 from invariant.spec import Version
@@ -93,9 +104,11 @@ from invariant.spec import Version
 assert Version("2.0rc1") < Version("2.0")
 ```
 
-## Declare plugin dependencies explicitly
+See [Manifest v1](../reference/manifest-v1.md) for accepted metadata and version-related behavior.
 
-Plugin dependencies belong in the manifest `dependencies` list.
+## Declare Invariant dependencies explicitly
+
+Use the manifest `dependencies` list for dependencies on another plugin or a capability:
 
 ```json
 {
@@ -110,14 +123,7 @@ Plugin dependencies belong in the manifest `dependencies` list.
 }
 ```
 
-The fields mean:
-
-- `id` — plugin or capability reference;
-- `param` — keyword name used when the dependency is injected into `initialize(...)`;
-- `scope` — dependency lifetime;
-- `optional` — whether absence may resolve to `None` instead of failing activation.
-
-Then receive the dependency by its declared parameter name:
+`param` is the keyword name injected into `initialize(...)`:
 
 ```python
 class SearchPlugin(BasePlugin):
@@ -125,36 +131,36 @@ class SearchPlugin(BasePlugin):
         self.storage = storage
 ```
 
-Supported dependency scopes are `SINGLETON`, `EXECUTION`, `PLUGIN`, and `TRANSIENT`.
+Available dependency scopes are `SINGLETON`, `EXECUTION`, `PLUGIN`, and `TRANSIENT`. The default is `EXECUTION`.
 
-## Treat capabilities as host resources
+Keep plugin dependencies explicit rather than discovering collaborators through global state.
 
-A capability is a runtime-controlled handle to something outside the plugin, such as filesystem, HTTP, configuration, or workspace access.
-
-Do not bypass a capability by reaching directly into host state if you expect policy to govern that resource.
-
-Read [Capabilities](../../CAPABILITIES.md) for capability IDs and policy semantics.
-
-## Keep Python package isolation separate from plugin dependencies
+## Keep Python dependencies separate
 
 Two manifest fields solve different problems:
 
 ```text
-dependencies  → dependencies on other Invariant plugins/capabilities
-deps          → Python environment dependencies for isolated execution
+dependencies  → other Invariant plugins or capabilities
+deps          → third-party Python packages for an isolated plugin environment
 ```
 
-Do not mix them conceptually.
+For a plugin with no isolated Python environment, omit `deps`.
 
-For a plugin that needs no third-party Python packages, omit `deps` entirely.
+When a plugin needs third-party packages outside the host environment, use the [`deps` section of Manifest v1](../reference/manifest-v1.md#python-environment-dependencies-deps).
 
-For isolated Python dependencies, see the [`deps` section of Manifest v1](../reference/manifest-v1.md#python-environment-dependencies-deps).
+Do not treat process isolation as a hostile-code sandbox. See [Security](../../SECURITY.md).
 
-## Use maturity intentionally
+## Use capabilities for governed host resources
 
-`maturity` communicates whether discovery should treat a plugin as stable by default.
+A capability is a runtime-controlled handle to a host resource such as filesystem, HTTP, configuration, KV storage, or workspace access.
 
-Allowed values:
+If a resource is meant to be governed by host policy, access it through the capability surface rather than bypassing that surface through unrelated host state.
+
+Read [Capabilities](../../CAPABILITIES.md) for the built-in capability contract and security semantics.
+
+## Use maturity to control discovery
+
+Manifest `maturity` can be:
 
 - `experimental`
 - `beta`
@@ -165,48 +171,29 @@ The default is `stable`.
 
 `PluginService.from_manifest_paths(...)` excludes non-stable plugins unless the host explicitly passes `include_unstable=True`.
 
-## Keep IDs stable
-
-Plugin IDs are case-insensitive after canonicalization and are intended to be durable identities.
-
-A useful convention is:
-
-```text
-<owner-or-domain>:<plugin-name>
-```
-
-Examples:
-
-```text
-acme:storage
-acme:search
-example:hello
-```
-
-Changing a plugin ID creates a different identity. Use versions to evolve an existing plugin contract.
-
 ## Design for failure containment
 
-A plugin can fail during construction, initialization, method calls, or shutdown. Prefer designs that make cleanup predictable:
+A plugin can fail during construction, initialization, ordinary method calls, or shutdown. Prefer designs that keep failure boundaries visible:
 
 - acquire resources during initialization rather than module import;
 - keep external side effects explicit;
 - make shutdown idempotent where practical;
 - avoid hidden global mutable state;
-- surface meaningful exceptions rather than silently corrupting state.
+- raise meaningful exceptions instead of silently corrupting state.
 
-Invariant can govern runtime lifecycle, but it cannot make arbitrary plugin side effects transactional automatically.
+Invariant can govern runtime-owned lifecycle. It cannot automatically make arbitrary external side effects transactional.
 
-## Before calling a plugin production-ready
+## Production checklist
 
-Check that:
+Before calling a plugin production-ready, check that:
 
-- the manifest has an explicit version;
-- public plugin code imports from `invariant.spec` rather than internal layers;
+- the manifest declares a stable ID and explicit version;
+- plugin code uses the supported `invariant.spec` surface;
 - initialization and shutdown are deterministic;
 - dependencies are declared rather than discovered implicitly;
-- capabilities are used for governed host resources;
-- security assumptions match [SECURITY.md](../../SECURITY.md);
+- governed host resources are reached through capabilities;
+- Python isolation requirements are explicit;
+- trust assumptions match [SECURITY.md](../../SECURITY.md);
 - the plugin has tests independent of the host product.
 
 ## Reference

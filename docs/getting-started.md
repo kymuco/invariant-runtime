@@ -2,7 +2,7 @@
 
 Build and run your first Invariant plugin from an empty directory.
 
-By the end, you will have:
+You will create three files:
 
 ```text
 hello_plugin/
@@ -11,7 +11,7 @@ hello_plugin/
 └── run.py
 ```
 
-and this output:
+and finish with:
 
 ```text
 Hello, Invariant!
@@ -20,9 +20,9 @@ Hello, Invariant!
 ## Requirements
 
 - Python 3.13 or newer
-- Invariant Runtime installed in your environment
+- Invariant Runtime installed in the active environment
 
-From a source checkout:
+From a source checkout, install it with:
 
 ```bash
 python -m pip install .
@@ -49,13 +49,13 @@ class HelloPlugin(BasePlugin):
 
 A plugin is ordinary Python code with a small lifecycle contract:
 
-- `initialize(...)` runs when the runtime activates the plugin.
-- `shutdown()` runs when the runtime releases it.
-- your own methods, such as `greet()`, define the behavior your host uses.
+- `initialize(...)` is the point where the runtime makes the plugin usable;
+- `shutdown()` releases plugin-owned resources;
+- ordinary methods, such as `greet()`, define behavior for the host.
 
-`BasePlugin` comes from `invariant.spec`, the supported plugin-author namespace.
+Plugin implementations should import author-facing contracts from `invariant.spec`.
 
-## 2. Describe it with a manifest
+## 2. Add the manifest
 
 Create `hello_plugin/manifest.json`:
 
@@ -64,9 +64,6 @@ Create `hello_plugin/manifest.json`:
   "manifest_version": 1,
   "id": "example:hello",
   "version": "1.0.0",
-  "name": "Hello Plugin",
-  "description": "A minimal Invariant plugin.",
-  "maturity": "stable",
   "source": {
     "code_path": "plugin.py",
     "class_name": "HelloPlugin"
@@ -74,17 +71,17 @@ Create `hello_plugin/manifest.json`:
 }
 ```
 
-The manifest answers five questions:
+For the recommended strict host path, these fields are enough:
 
-1. Which manifest contract is this? `manifest_version`.
-2. What is the plugin called? `id`.
-3. Which concrete version is this? `version`.
-4. Where is the code? `source.code_path`.
-5. Which class should Invariant instantiate? `source.class_name`.
+- `manifest_version` selects the manifest contract;
+- `id` is the stable plugin identity;
+- `version` is the concrete plugin version;
+- `source.code_path` points to the Python file;
+- `source.class_name` names the plugin class.
 
-Everything else is optional until your plugin needs it.
+Metadata, dependencies, timeouts, and Python isolation are optional until your plugin needs them.
 
-## 3. Create the host
+## 3. Run it from a host
 
 Create `hello_plugin/run.py`:
 
@@ -94,17 +91,21 @@ from pathlib import Path
 from invariant.api import PluginService
 
 
-plugin_dir = Path(__file__).resolve().parent
-service = PluginService.from_manifest_paths([plugin_dir])
+def main() -> None:
+    plugin_dir = Path(__file__).resolve().parent
+    service = PluginService.from_manifest_paths([plugin_dir])
+    try:
+        hello = service.get("example:hello")
+        print(hello.greet("Invariant"))
+    finally:
+        service.close()
 
-try:
-    hello = service.get("example:hello")
-    print(hello.greet("Invariant"))
-finally:
-    service.close()
+
+if __name__ == "__main__":
+    main()
 ```
 
-Run it:
+Run:
 
 ```bash
 python hello_plugin/run.py
@@ -116,19 +117,18 @@ Expected output:
 Hello, Invariant!
 ```
 
-## What just happened
+That is the complete first-plugin path.
+
+## What happened
 
 ```text
 manifest.json
      │
      ▼
-discover plugin metadata
+discover metadata
      │
      ▼
-register example:hello@1.0.0
-     │
-     ▼
-service.get("example:hello")
+select example:hello@1.0.0
      │
      ▼
 load HelloPlugin
@@ -143,23 +143,24 @@ hello.greet(...)
 service.close() → shutdown()
 ```
 
-The host does not need to assemble loader, registry, or source objects itself. `PluginService.from_manifest_paths(...)` keeps those implementation details behind the supported host facade.
+`PluginService.from_manifest_paths(...)` keeps discovery, registry construction, and source loading behind the supported host API. Your application does not need to assemble those internal objects itself.
 
-## Add behavior, not runtime plumbing
+## Grow the plugin only when you need to
 
-Your plugin can now grow in three directions:
+From here, a plugin can add:
 
-- declare plugin dependencies when it needs another plugin;
-- request policy-governed capabilities when it needs filesystem, network, configuration, or workspace access;
-- use isolated Python dependencies when it needs packages that should not live in the host environment.
+- dependencies on other Invariant plugins or capabilities;
+- policy-governed filesystem, HTTP, configuration, KV, or workspace access;
+- isolated Python dependencies for packages that should not live in the host environment;
+- richer metadata, maturity, and runtime timeout configuration.
 
-Those features are deliberately not required for the first plugin.
+None of those concepts are required for the first successful plugin.
 
 ## Next
 
-- Read [Plugin authoring](guides/plugin-authoring.md) for lifecycle and design guidance.
-- Use the [Manifest v1 reference](reference/manifest-v1.md) when you add metadata, dependencies, timeouts, or isolation.
-- Read the [Runtime model](concepts/runtime-model.md) to understand what Invariant owns versus what your plugin owns.
-- Read [Capabilities](../CAPABILITIES.md) before giving plugins access to host resources.
+- [Plugin authoring](guides/plugin-authoring.md) — lifecycle, dependencies, capabilities, and production guidance
+- [Runtime model](concepts/runtime-model.md) — the small mental model behind the host API
+- [Manifest v1](reference/manifest-v1.md) — fields, defaults, validation, and isolation metadata
+- [Capabilities](../CAPABILITIES.md) — policy-governed access to host resources
 
-The repository contains the same checked example under [`examples/hello_plugin`](../examples/hello_plugin/README.md).
+The repository keeps this exact tutorial example under [`examples/hello_plugin`](../examples/hello_plugin/README.md), and the documentation test suite checks that the tutorial code stays synchronized with those files.
