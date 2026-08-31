@@ -1,0 +1,12 @@
+{
+  "manifest_version": 1,
+  "id": "example:hello",
+  "version": "1.0.0",
+  "name": "Hello Plugin",
+  "description": "A minimal Invariant plugin.",
+  "maturity": "stable",
+  "source": {
+    "code_path": "plugin.py",
+    "class_name": "HelloPlugin"
+  }
+}
