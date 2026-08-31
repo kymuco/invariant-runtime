@@ -42,11 +42,27 @@ def test_documentation_site_config_is_reproducible() -> None:
     assert "navigation.instant" in theme["features"]
     assert "search.highlight" in theme["features"]
 
-    macros = project["markdown_extensions"]["zensical.extensions.macros"]
+    extensions = project["markdown_extensions"]
+    macros = extensions["zensical"]["extensions"]["macros"]
     assert macros["module_name"] == "docs_macros"
     assert macros["on_error_fail"] is True
     assert macros["on_undefined"] == "strict"
     assert "include_dir" not in macros
+
+    highlight = extensions["pymdownx"]["highlight"]
+    assert highlight["line_spans"] == "__span"
+    assert highlight["pygments_lang_class"] is True
+
+    superfences = extensions["pymdownx"]["superfences"]
+    assert superfences["custom_fences"] == [
+        {
+            "name": "mermaid",
+            "class": "mermaid",
+            "format": "pymdownx.superfences.fence_code_format",
+        }
+    ]
+
+    assert extensions["tables"] == {}
 
     for target in _nav_targets(project["nav"]):
         if target.startswith(_EXTERNAL_PREFIXES):

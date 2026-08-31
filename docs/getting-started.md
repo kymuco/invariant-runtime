@@ -121,26 +121,15 @@ That is the complete first-plugin path.
 
 ## What happened
 
-```text
-manifest.json
-     │
-     ▼
-discover metadata
-     │
-     ▼
-select example:hello@1.0.0
-     │
-     ▼
-load HelloPlugin
-     │
-     ▼
-initialize(...)
-     │
-     ▼
-hello.greet(...)
-     │
-     ▼
-service.close() → shutdown()
+```mermaid
+flowchart TD
+    A["manifest.json"] --> B["Discover metadata"]
+    B --> C["Select example:hello@1.0.0"]
+    C --> D["Load HelloPlugin"]
+    D --> E["initialize(...)"]
+    E --> F["hello.greet(...)"]
+    F --> G["service.close()"]
+    G --> H["shutdown()"]
 ```
 
 `PluginService.from_manifest_paths(...)` keeps discovery, registry construction, and source loading behind the supported host API. Your application does not need to assemble those internal objects itself.
