@@ -1,7 +1,9 @@
 # invariant/api/service.py
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any, Self
 
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
 from invariant.api.types import WorkspaceOptions
@@ -63,6 +65,7 @@ class PluginService:
 
         # Safe config source in managed runtime (env reading is policy-controlled; defaults are safe).
         from invariant.exec.caps.config_source import EnvDictConfigSource
+
         limits = getattr(self._managed_policy, "limits", None)
         config = getattr(self._managed_policy, "config", None) or {}
         self._managed_capabilities.register(
@@ -79,10 +82,49 @@ class PluginService:
             RuntimeInspector(
                 registry=self.registry,
                 runtime=self._managed_runtime,
-                capabilities=self._managed_runtime.capabilities,  # <-- важно
+                capabilities=self._managed_runtime.capabilities,
             ),
         )
         self._managed_capabilities.freeze()
+
+    @classmethod
+    def from_manifest_paths(
+        cls,
+        search_paths: Iterable[str | Path],
+        *,
+        include_unstable: bool = False,
+        fail_fast: bool = True,
+        tracer: Any | None = None,
+    ) -> Self:
+        """
+        Build a service from one or more directories containing ``manifest.json`` files.
+
+        This is the recommended host entry point for manifest-based plugins. Discovery
+        and registration use strict mode, so every discovered plugin must declare an
+        explicit version.
+        """
+        paths = [Path(path) for path in search_paths]
+        if not paths:
+            raise ValueError("search_paths must contain at least one path")
+
+        # Keep loader/registry/source machinery behind the public facade. They remain
+        # implementation-level surfaces in the 0.1 compatibility contract.
+        from invariant.catalog.registry import PluginRegistry
+        from invariant.load.loader import PluginLoader
+        from invariant.load.sources.manifest import ManifestSource
+
+        registry = PluginRegistry(mode="strict")
+        loader = PluginLoader([ManifestSource(paths)])
+
+        descriptors = loader.discover(
+            include_unstable=include_unstable,
+            mode="strict",
+            fail_fast=fail_fast,
+        )
+        for descriptor in descriptors:
+            registry.register(descriptor)
+
+        return cls(registry=registry, loader=loader, tracer=tracer)
 
     # ---------- managed (singleton) ----------
 
@@ -91,7 +133,7 @@ class PluginService:
         Return managed (singleton) plugin instance.
         """
         return self._managed_runtime.get(plugin_id)
-    
+
     def shutdown(self, plugin_id: str) -> None:
         """
         Explicitly shutdown managed (singleton) plugin and drop it from cache.
@@ -142,7 +184,7 @@ class PluginService:
             workspace_path=workspace_path,
             cleanup_sandbox=cleanup_sandbox,
         )
-    
+
     def workspace(
         self,
         workspace_id: str,
@@ -170,7 +212,7 @@ class PluginService:
             workspace_options=options,
             cleanup_sandbox=cleanup_sandbox,
         )
-    
+
     def _managed_dependency_get(self, spec):
         dep_id = spec.id
         if is_capability_ref(dep_id):
