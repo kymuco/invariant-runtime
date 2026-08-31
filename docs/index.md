@@ -12,7 +12,7 @@ Then read:
 
 - [Plugin authoring guide](guides/plugin-authoring.md)
 - [Manifest v1 reference](reference/manifest-v1.md)
-- [Capabilities contract](../CAPABILITIES.md)
+- [Capabilities contract](reference/capabilities.md)
 
 ### I want to embed Invariant in an application
 
@@ -32,7 +32,7 @@ Read:
 
 - [Runtime model](concepts/runtime-model.md)
 - [Core architecture](core.md)
-- [Security model](../SECURITY.md)
+- [Security model](security.md)
 - [Documentation standard](STYLE.md)
 
 ## Documentation map
@@ -50,12 +50,12 @@ Read:
 
 - [Public API](reference/public-api.md) — supported import surface for the 0.1 line
 - [Manifest v1](reference/manifest-v1.md) — manifest fields, types, defaults, and isolation metadata
-- [Capabilities](../CAPABILITIES.md) — capability IDs and security semantics
+- [Capabilities](reference/capabilities.md) — capability IDs and security semantics
 
 ### Architecture and trust
 
 - [Core architecture](core.md) — implementation layers and internal boundaries
-- [Security](../SECURITY.md) — trust model, isolation limits, and vulnerability reporting
+- [Security](security.md) — trust model, isolation limits, and vulnerability reporting
 
 ## Documentation promise
 

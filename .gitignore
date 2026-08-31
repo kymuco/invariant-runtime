@@ -8,5 +8,6 @@ venv/
 .wheel-smoke/
 dist/
 build/
+site/
 *.egg-info/
 .invariant/

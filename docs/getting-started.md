@@ -161,6 +161,6 @@ None of those concepts are required for the first successful plugin.
 - [Plugin authoring](guides/plugin-authoring.md) — lifecycle, dependencies, capabilities, and production guidance
 - [Runtime model](concepts/runtime-model.md) — the small mental model behind the host API
 - [Manifest v1](reference/manifest-v1.md) — fields, defaults, validation, and isolation metadata
-- [Capabilities](../CAPABILITIES.md) — policy-governed access to host resources
+- [Capabilities](reference/capabilities.md) — policy-governed access to host resources
 
-The repository keeps this exact tutorial example under [`examples/hello_plugin`](../examples/hello_plugin/README.md), and the documentation test suite checks that the tutorial code stays synchronized with those files.
+The repository keeps this exact tutorial example in [`examples/hello_plugin`](https://github.com/kymuco/invariant-runtime/tree/main/examples/hello_plugin), and the documentation test suite checks that the tutorial code stays synchronized with those files.

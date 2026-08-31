@@ -88,7 +88,7 @@ Creates an execution-scoped context using an explicit policy and execution-owned
 
 Creates an execution context bound to a persistent workspace ID.
 
-For policy and capability semantics, read [Security](../../SECURITY.md) and [Capabilities](../../CAPABILITIES.md).
+For policy and capability semantics, read [Security](../security.md) and [Capabilities](capabilities.md).
 
 ## Plugin-author API: `invariant.spec`
 

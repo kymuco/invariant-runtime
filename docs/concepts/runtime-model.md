@@ -78,7 +78,7 @@ Examples include filesystem access, configuration, HTTP, KV storage, workspace a
 
 Capabilities let a host govern access through explicit interfaces. They are **not** a complete sandbox for hostile Python code.
 
-See [Capabilities](../../CAPABILITIES.md) and [Security](../../SECURITY.md).
+See [Capabilities](../reference/capabilities.md) and [Security](../security.md).
 
 ## What happens behind the service
 
@@ -193,4 +193,4 @@ policy-governed capability ≠ hostile-code sandbox
 
 In-process plugins are trusted code. Isolated plugin workers provide dependency and failure separation, but hostile or marketplace code requires stronger external isolation.
 
-Read [Security](../../SECURITY.md) before designing an untrusted-plugin system.
+Read [Security](../security.md) before designing an untrusted-plugin system.

@@ -1,0 +1,65 @@
+[project]
+site_name = "Invariant Runtime"
+site_description = "Policy-aware plugin runtime for Python."
+site_author = "kymuco"
+site_url = "https://kymuco.github.io/invariant-runtime/"
+repo_url = "https://github.com/kymuco/invariant-runtime"
+repo_name = "kymuco/invariant-runtime"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+site_dir = "site"
+copyright = "Invariant Runtime · Apache-2.0"
+extra_css = [
+  "stylesheets/invariant.css",
+]
+nav = [
+  { "Overview" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Concepts" = [
+    { "Runtime model" = "concepts/runtime-model.md" },
+  ] },
+  { "Guides" = [
+    { "Plugin authoring" = "guides/plugin-authoring.md" },
+  ] },
+  { "Reference" = [
+    { "Public API" = "reference/public-api.md" },
+    { "Manifest v1" = "reference/manifest-v1.md" },
+    { "Capabilities" = "reference/capabilities.md" },
+  ] },
+  { "Security" = "security.md" },
+  { "Project" = [
+    { "Core architecture" = "core.md" },
+    { "Documentation standard" = "STYLE.md" },
+  ] },
+]
+
+[project.theme]
+variant = "modern"
+font = false
+features = [
+  "navigation.instant",
+  "navigation.footer",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.extra]
+generator = false
+
+[project.markdown_extensions]
+zensical.extensions.macros = { include_dir = "." }

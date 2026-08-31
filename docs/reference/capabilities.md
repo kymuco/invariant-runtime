@@ -1,0 +1,1 @@
+{% include "CAPABILITIES.md" %}
