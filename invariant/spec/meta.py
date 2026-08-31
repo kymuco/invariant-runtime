@@ -5,10 +5,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from packaging.version import InvalidVersion, Version
-
 from invariant.spec.dependency import DependencyScope, DependencySpec
 from invariant.spec.ids import base_id, canonical_id_or_ref, canonical_plugin_id
+from invariant.spec.versioning import InvalidVersion, Version
 
 # or replace to `canonical_plugin_id`
 
