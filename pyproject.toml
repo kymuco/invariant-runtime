@@ -9,6 +9,7 @@ description = "Policy-aware plugin runtime for versioned discovery, dependency r
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
   { name = "kymuco" },
 ]
@@ -16,7 +17,6 @@ keywords = ["plugins", "runtime", "capabilities", "policy", "execution"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.13",
