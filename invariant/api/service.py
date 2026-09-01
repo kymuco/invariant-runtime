@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
-from invariant.api.types import WorkspaceOptions
+from invariant.api.types import PluginInfo, WorkspaceOptions
 from invariant.exec.caps.ids import CAP_CONFIG_SOURCE, CAP_INSPECTOR
 from invariant.exec.caps.inspector import RuntimeInspector
 from invariant.exec.caps.registry import (
@@ -21,6 +21,8 @@ from invariant.exec.runtime.execution_runtime import ExecutionRuntime
 from invariant.exec.runtime.resolver import DependencyResolver
 from invariant.load.env.env_manager import EnvManager
 from invariant.ops.ids import normalize_workspace_id
+from invariant.spec.errors import AmbiguousPluginReference, PluginNotFoundError
+from invariant.spec.versioning import Version
 
 
 class PluginService:
@@ -125,6 +127,39 @@ class PluginService:
             registry.register(descriptor)
 
         return cls(registry=registry, loader=loader, tracer=tracer)
+
+    # ---------- inventory ----------
+
+    def list_plugins(self, *, category: str | None = None) -> tuple[PluginInfo, ...]:
+        """Return an immutable host-facing snapshot of discovered plugin builds."""
+        infos = [
+            PluginInfo(
+                id=descriptor.meta.id,
+                version=descriptor.meta.version,
+                name=descriptor.meta.name,
+                maturity=descriptor.meta.maturity or "stable",
+                categories=tuple(descriptor.meta.categories or ()),
+            )
+            for descriptor in self.registry.list(category=category)
+        ]
+
+        def _sort_key(info: PluginInfo) -> tuple[str, bool, Version]:
+            version = Version(info.version) if info.version is not None else Version("0.dev0")
+            return (info.id, info.version is not None, version)
+
+        return tuple(sorted(infos, key=_sort_key))
+
+    def has_plugin(self, plugin_id: str) -> bool:
+        """Return whether a plugin reference names at least one discovered build."""
+        try:
+            self.registry.resolve(plugin_id)
+        except PluginNotFoundError:
+            return False
+        except AmbiguousPluginReference:
+            # Multiple local builds still mean the base plugin exists; activation may
+            # require an exact version to disambiguate them.
+            return True
+        return True
 
     # ---------- managed (singleton) ----------
 
