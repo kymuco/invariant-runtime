@@ -39,8 +39,20 @@ def test_documentation_site_config_is_reproducible() -> None:
     theme = project["theme"]
     assert theme["variant"] == "modern"
     assert theme["font"] is False
-    assert "navigation.instant" in theme["features"]
-    assert "search.highlight" in theme["features"]
+
+    features = set(theme["features"])
+    assert {
+        "navigation.instant",
+        "navigation.tracking",
+        "navigation.sections",
+        "navigation.path",
+        "navigation.top",
+        "navigation.footer",
+        "toc.follow",
+        "search.highlight",
+        "content.code.copy",
+        "content.tooltips",
+    } <= features
 
     extensions = project["markdown_extensions"]
     macros = extensions["zensical"]["extensions"]["macros"]
@@ -72,6 +84,21 @@ def test_documentation_site_config_is_reproducible() -> None:
     pyproject = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["dependencies"] == []
     assert pyproject["project"]["optional-dependencies"]["docs"] == ["zensical==0.0.57"]
+
+
+def test_documentation_home_is_a_product_front_door() -> None:
+    home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
+    styles = (_DOCS_ROOT / "stylesheets" / "invariant.css").read_text(encoding="utf-8")
+
+    assert "Runtime boundaries you can reason about." in home
+    assert "iv-hero" in home
+    assert "iv-path-grid" in home
+    assert "iv-security" in home
+    assert "Build your first plugin" in home
+    assert "hide:\n  - toc" in home
+
+    for selector in (".iv-hero", ".iv-path-grid", ".iv-split", ".iv-security"):
+        assert selector in styles
 
 
 def test_site_markdown_links_stay_inside_docs_root() -> None:

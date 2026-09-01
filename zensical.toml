@@ -42,8 +42,15 @@ variant = "modern"
 font = false
 features = [
   "navigation.instant",
+  "navigation.tracking",
+  "navigation.sections",
+  "navigation.path",
+  "navigation.top",
   "navigation.footer",
+  "toc.follow",
   "search.highlight",
+  "content.code.copy",
+  "content.tooltips",
 ]
 
 [[project.theme.palette]]
