@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from invariant.api.policies import EphemeralPolicy, ManagedPolicy
-from invariant.api.types import PluginInfo, WorkspaceOptions
+from invariant.api.types import PluginInfo, RuntimeObservabilityOptions, WorkspaceOptions
 from invariant.exec.caps.ids import CAP_CONFIG_SOURCE, CAP_INSPECTOR
 from invariant.exec.caps.inspector import RuntimeInspector
 from invariant.exec.caps.registry import (
@@ -103,6 +103,7 @@ class PluginService:
         include_unstable: bool = False,
         fail_fast: bool = True,
         tracer: Any | None = None,
+        observability: RuntimeObservabilityOptions | None = None,
     ) -> Self:
         """
         Build a service from one or more directories containing ``manifest.json`` files.
@@ -111,6 +112,9 @@ class PluginService:
         and registration use strict mode, so every discovered plugin must declare an
         explicit version.
         """
+        if tracer is not None and observability is not None:
+            raise ValueError("tracer and observability are mutually exclusive")
+
         paths = [Path(path) for path in search_paths]
         if not paths:
             raise ValueError("search_paths must contain at least one path")
@@ -132,7 +136,11 @@ class PluginService:
         for descriptor in descriptors:
             registry.register(descriptor)
 
-        return cls(registry=registry, loader=loader, tracer=tracer)
+        resolved_tracer = tracer
+        if observability is not None:
+            resolved_tracer = _build_standard_runtime_tracer(observability)
+
+        return cls(registry=registry, loader=loader, tracer=resolved_tracer)
 
     # ---------- inventory ----------
 
@@ -265,3 +273,15 @@ class PluginService:
                     return None
                 raise
         return self._managed_runtime.get(dep_id)
+
+
+def _build_standard_runtime_tracer(options: RuntimeObservabilityOptions) -> Any:
+    """Materialize Invariant's standard tracer without exposing its concrete type publicly."""
+    from invariant.ops.metrics import RuntimeMetrics
+    from invariant.ops.tracing import InMemoryRuntimeTracer
+
+    return InMemoryRuntimeTracer(
+        metrics=RuntimeMetrics(),
+        debug_touch_events=options.debug_touch_events,
+        max_events_per_stream=options.max_events_per_stream,
+    )
