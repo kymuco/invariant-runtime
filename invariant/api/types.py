@@ -17,13 +17,25 @@ class PluginInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeObservabilityOptions:
+    """Host-facing options for Invariant's standard bounded runtime observability."""
+
+    debug_touch_events: bool = False
+    max_events_per_stream: int = 2000
+
+    def __post_init__(self) -> None:
+        if self.max_events_per_stream < 10:
+            raise ValueError("max_events_per_stream must be >= 10")
+
+
+@dataclass(frozen=True, slots=True)
 class WorkspaceOptions:
     allow_write: bool = True
     allow_delete: bool = False
     max_read_bytes: int = 10_000_000
     max_write_bytes: int = 10_000_000
     root_dirname: str = ".invariant/workspaces"
-    
+
     def __post_init__(self) -> None:
         if self.max_read_bytes <= 0:
             raise ValueError("max_read_bytes must be > 0")
