@@ -137,6 +137,8 @@ Not every internal exception is promoted. Errors that represent implementation-o
 
 Plugin implementations and plugin-side tooling should import from `invariant.spec`.
 
+### Core plugin contracts
+
 | Export | Purpose |
 | --- | --- |
 | `BasePlugin` | Base lifecycle contract for concrete plugins. |
@@ -147,6 +149,66 @@ Plugin implementations and plugin-side tooling should import from `invariant.spe
 | `Version` | Invariant-owned concrete version parser and comparator. |
 | `InvalidVersion` | Error raised for invalid concrete versions. |
 | `canon_version_key` | Normalize a concrete version to its registry key. |
+
+### Capability authoring contracts
+
+Public capability identities, structural types, and broad operation errors also live in `invariant.spec`.
+
+| Export | Purpose |
+| --- | --- |
+| `CapabilityRef` | Immutable built-in capability ID + concrete contract version. |
+| `BUILTIN_CAPABILITIES` | Enumerated plugin-facing built-in capability references. |
+| `FS_SANDBOX_CAPABILITY` | `fs_sandbox@0.2.0` contract. |
+| `WORKSPACE_CAPABILITY` | `workspace@0.2.0` contract. |
+| `HTTP_CAPABILITY` | `http@0.1.0` contract. |
+| `KEY_VALUE_CAPABILITY` | `kv@0.1.0` contract. |
+| `CONFIG_SOURCE_CAPABILITY` | `config_source@0.1.0` contract. |
+| `INSPECTOR_CAPABILITY` | `inspector@0.1.0` contract. |
+| `FilesystemCapability` | Structural filesystem operations available to plugin code. |
+| `HttpCapability` | Structural governed HTTP operations. |
+| `KeyValueCapability` | Structural key-value operations. |
+| `ConfigSourceCapability` | Structural read-only configuration operations. |
+| `RuntimeInspectorCapability` | Structural read-only runtime inspection operations. |
+| `CapabilityOperationError` | Base error after a capability handle has been granted. |
+| `FilesystemCapabilityError` | Broad filesystem operation failure. |
+| `HttpCapabilityError` | Broad HTTP operation failure. |
+| `KeyValueCapabilityError` | Broad key-value operation failure. |
+
+A capability reference is descriptive, not authoritative:
+
+```python
+from invariant.spec import FS_SANDBOX_CAPABILITY
+
+assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.2.0"
+```
+
+The manifest still declares the requirement as data, and the host policy still decides whether the execution receives it.
+
+Type plugin code against the structural contract rather than the runtime implementation:
+
+```python
+from invariant.spec import BasePlugin, FilesystemCapability
+
+
+class NotesStoragePlugin(BasePlugin):
+    def initialize(self, *, fs: FilesystemCapability, **deps) -> None:
+        self._fs = fs
+```
+
+`FilesystemCapability` intentionally omits concrete implementation layout such as an underlying root path or internal resolver. It describes operations the plugin may rely on, not how the runtime implements them.
+
+If a granted handle later fails an operation, plugin code can catch a broad contract error without importing `invariant.exec`:
+
+```python
+from invariant.spec import FilesystemCapabilityError
+
+try:
+    fs.write_text("note.txt", text)
+except FilesystemCapabilityError:
+    ...
+```
+
+This is distinct from `invariant.api.CapabilityUnavailableError`, which is a host-facing acquisition/authority failure before the plugin receives the required handle.
 
 ### `BasePlugin`
 
@@ -207,16 +269,19 @@ invariant.ops
 
 Unexported objects inside `invariant.api` and `invariant.spec` are also implementation-level unless a future compatibility contract says otherwise.
 
-Advanced integrations may inspect or use those modules, but direct imports accept a higher compatibility risk during the 0.x line. Public aliases remain the compatibility surface even when their implementation currently lives in one of these modules.
+Advanced integrations may inspect or use those modules, but direct imports accept a higher compatibility risk during the 0.x line. Public aliases and Protocols remain the compatibility surface even when their implementation currently lives in one of these modules.
 
 ## Typing
 
 Invariant ships a `py.typed` marker and inline Python annotations. Type checkers can consume the installed package directly.
 
+Capability Protocols are structural: plugins depend on the behavior they need, while the runtime remains free to change the concrete implementation as long as the declared contract remains compatible.
+
 ## Compatibility rules for 0.x
 
 - new public exports should be added deliberately;
 - removal or semantic changes to an existing public export should be called out in release notes;
+- built-in capability ID/version changes are compatibility changes;
 - implementation-level modules may change without the same compatibility promise;
 - examples and ordinary guides should use the public facades unless they are explicitly documenting internals.
 
@@ -226,3 +291,4 @@ Invariant ships a `py.typed` marker and inline Python annotations. Type checkers
 - [Plugin authoring](../guides/plugin-authoring.md)
 - [Dependencies and capabilities](../guides/dependencies-and-capabilities.md)
 - [Manifest v1](manifest-v1.md)
+- [Capabilities](capabilities.md)

@@ -15,6 +15,14 @@ from invariant.exec.caps.ids import (
     CAP_PREFIX,
     CAP_WORKSPACE,
 )
+from invariant.spec.capabilities import (
+    CONFIG_SOURCE_CAPABILITY,
+    FS_SANDBOX_CAPABILITY,
+    HTTP_CAPABILITY,
+    INSPECTOR_CAPABILITY,
+    KEY_VALUE_CAPABILITY,
+    WORKSPACE_CAPABILITY,
+)
 from invariant.spec.versioning import canon_version_key
 
 
@@ -23,12 +31,12 @@ class CapabilitySpec:
     """
     Platform contract for a capability.
 
-    This is the canonical, investor-grade list of what the platform provides.
+    This is the canonical runtime catalog of what the platform provides.
     Runtime registration MUST match this catalog in strict mode.
     """
 
     cap_id: str                 # base id (no @version)
-    version: str                # semver string (platform contract version)
+    version: str                # concrete platform contract version
     title: str
     description: str = ""
 
@@ -45,7 +53,7 @@ class CapabilitySpec:
 CATALOG: dict[str, CapabilitySpec] = {
     CAP_INSPECTOR: CapabilitySpec(
         cap_id=CAP_INSPECTOR,
-        version="0.1.0",
+        version=INSPECTOR_CAPABILITY.version,
         title="Runtime inspector",
         description="Safe dict-only view over runtime state and selected environment info.",
         events_prefix=None,
@@ -60,7 +68,7 @@ CATALOG: dict[str, CapabilitySpec] = {
     ),
     CAP_FS_SANDBOX: CapabilitySpec(
         cap_id=CAP_FS_SANDBOX,
-        version="0.2.0",
+        version=FS_SANDBOX_CAPABILITY.version,
         title="FS sandbox",
         description="Root-scoped file access with traversal and symlink hardening, read/write limits, atomic writes.",
         events_prefix="cap.fs.",
@@ -69,7 +77,7 @@ CATALOG: dict[str, CapabilitySpec] = {
     ),
     CAP_WORKSPACE: CapabilitySpec(
         cap_id=CAP_WORKSPACE,
-        version="0.2.0",
+        version=WORKSPACE_CAPABILITY.version,
         title="Workspace FS",
         description="Persistent workspace-scoped FS access (policy gated).",
         events_prefix="cap.fs.",
@@ -77,7 +85,7 @@ CATALOG: dict[str, CapabilitySpec] = {
     ),
     CAP_HTTP: CapabilitySpec(
         cap_id=CAP_HTTP,
-        version="0.1.0",
+        version=HTTP_CAPABILITY.version,
         title="HTTP client",
         description="Outbound HTTP(S) client with host allowlist, timeouts, max response size.",
         events_prefix="cap.http.",
@@ -86,7 +94,7 @@ CATALOG: dict[str, CapabilitySpec] = {
     ),
     CAP_KV: CapabilitySpec(
         cap_id=CAP_KV,
-        version="0.1.0",
+        version=KEY_VALUE_CAPABILITY.version,
         title="KV store",
         description="JSON-backed KV store with corruption detection and optional repair-on-write.",
         events_prefix="cap.kv.",
@@ -94,7 +102,7 @@ CATALOG: dict[str, CapabilitySpec] = {
     ),
     CAP_CONFIG_SOURCE: CapabilitySpec(
         cap_id=CAP_CONFIG_SOURCE,
-        version="0.1.0",
+        version=CONFIG_SOURCE_CAPABILITY.version,
         title="Config source",
         description="Read-only config source (env + dict) exposed to plugins via context/capabilities.",
         events_prefix=None,
@@ -108,7 +116,7 @@ CATALOG: dict[str, CapabilitySpec] = {
 # - OFFICIAL_CAPS / ALL_CAPS are derived from CATALOG only (no duplication).
 #
 OFFICIAL_CAPS: Final[frozenset[str]] = frozenset(CATALOG.keys())
-# Preserve insertion order from the dict literal (platform-defined, stable).
+# Preserve deterministic ordering for snapshots and diagnostics.
 ALL_CAPS: Final[tuple[str, ...]] = tuple(sorted(OFFICIAL_CAPS))
 
 
@@ -122,7 +130,7 @@ def _validate_catalog() -> None:
             raise RuntimeError(f"CATALOG key mismatch: key={cap_id!r} spec.cap_id={spec.cap_id!r}")
         if not isinstance(cap_id, str) or not cap_id.startswith(CAP_PREFIX):
             raise RuntimeError(f"Invalid capability id in catalog: {cap_id!r}")
-        # Ensure version is valid/normalizable (semver-ish).
+        # Ensure version is valid/normalizable.
         try:
             canon_version_key(spec.version)
         except Exception as e:

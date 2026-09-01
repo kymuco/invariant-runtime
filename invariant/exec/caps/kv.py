@@ -8,9 +8,10 @@ from typing import Any, Literal, Self
 
 from invariant.exec.caps.audit import CapabilityAudit
 from invariant.exec.caps.fs import FSAccess
+from invariant.spec.capabilities import KeyValueCapabilityError
 
 
-class KVError(RuntimeError):
+class KVError(KeyValueCapabilityError):
     pass
 
 

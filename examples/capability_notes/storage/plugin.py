@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from invariant.spec import BasePlugin
+from invariant.spec import BasePlugin, FilesystemCapability
 
 
 class NotesStoragePlugin(BasePlugin):
-    def initialize(self, *, fs, **deps) -> None:
+    def initialize(self, *, fs: FilesystemCapability, **deps) -> None:
         self._fs = fs
 
     def shutdown(self) -> None:
