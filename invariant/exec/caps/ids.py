@@ -3,7 +3,19 @@ from __future__ import annotations
 
 from typing import Final
 
-CAP_PREFIX = "invariant:capability."
+from invariant.spec.capabilities import (
+    CAPABILITY_PREFIX,
+    CONFIG_SOURCE_CAPABILITY,
+    FS_SANDBOX_CAPABILITY,
+    HTTP_CAPABILITY,
+    INSPECTOR_CAPABILITY,
+    KEY_VALUE_CAPABILITY,
+    WORKSPACE_CAPABILITY,
+)
+
+# Compatibility shim for runtime internals. Canonical plugin-facing capability
+# identities live in invariant.spec.capabilities.
+CAP_PREFIX: Final[str] = CAPABILITY_PREFIX
 
 
 def cap_base_id(raw: str) -> str:
@@ -22,14 +34,14 @@ def cap_base_id(raw: str) -> str:
     return s
 
 
-# Official ids (no more string-littering)
-CAP_INSPECTOR: Final[str]  = f"{CAP_PREFIX}inspector"
-CAP_AUDIT: Final[str]      = f"{CAP_PREFIX}audit"
+CAP_INSPECTOR: Final[str] = INSPECTOR_CAPABILITY.id
+CAP_FS_SANDBOX: Final[str] = FS_SANDBOX_CAPABILITY.id
+CAP_WORKSPACE: Final[str] = WORKSPACE_CAPABILITY.id
+CAP_HTTP: Final[str] = HTTP_CAPABILITY.id
+CAP_KV: Final[str] = KEY_VALUE_CAPABILITY.id
+CAP_CONFIG_SOURCE: Final[str] = CONFIG_SOURCE_CAPABILITY.id
 
-CAP_FS_SANDBOX: Final[str]    = f"{CAP_PREFIX}fs_sandbox"
-CAP_WORKSPACE: Final[str]     = f"{CAP_PREFIX}workspace"
-CAP_HTTP: Final[str]          = f"{CAP_PREFIX}http"
-CAP_KV: Final[str]            = f"{CAP_PREFIX}kv"
-CAP_CONFIG_SOURCE: Final[str] = f"{CAP_PREFIX}config_source"
-
+# Internal-only runtime capabilities are intentionally not part of the public
+# plugin-author contract.
+CAP_AUDIT: Final[str] = f"{CAP_PREFIX}audit"
 CAP_UNKNOWN: Final[str] = f"{CAP_PREFIX}<unknown>"

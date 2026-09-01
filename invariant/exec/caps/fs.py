@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any, Literal, Self
 
 from invariant.exec.caps.audit import CapabilityAudit
+from invariant.spec.capabilities import FilesystemCapabilityError
 
 
-class FSAccessError(RuntimeError):
+class FSAccessError(FilesystemCapabilityError):
     pass
 
 

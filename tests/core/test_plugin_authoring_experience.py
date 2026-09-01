@@ -103,6 +103,9 @@ def test_capability_notes_example_stays_on_public_import_surfaces() -> None:
     notes_plugin = (_CAPABILITY_NOTES_DIR / "notes" / "plugin.py").read_text(encoding="utf-8")
     runner = (_CAPABILITY_NOTES_DIR / "run.py").read_text(encoding="utf-8")
 
+    assert "from invariant.spec import BasePlugin, FilesystemCapability" in storage_plugin
+    assert "fs: FilesystemCapability" in storage_plugin
+
     for plugin_source in (storage_plugin, notes_plugin):
         assert "from invariant.spec import BasePlugin" in plugin_source
         assert "invariant.exec" not in plugin_source
