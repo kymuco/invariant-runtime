@@ -38,9 +38,15 @@ class PluginService:
         self.registry = registry
         self.loader = loader
         self.tracer = tracer
-        self.env_manager = EnvManager()
 
-        # Best-effort: wire EnvManager into ManifestSource instances so isolated deps work
+        loader_env_manager = getattr(loader, "_env_manager", None)
+        self.env_manager = (
+            loader_env_manager
+            if isinstance(loader_env_manager, EnvManager)
+            else EnvManager()
+        )
+
+        # Keep manifest sources and isolated loading on the same environment manager.
         srcs = getattr(loader, "sources", None)
         if isinstance(srcs, list):
             for src in srcs:
