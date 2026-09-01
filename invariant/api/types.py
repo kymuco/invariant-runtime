@@ -6,6 +6,17 @@ from pathlib import PurePosixPath
 
 
 @dataclass(frozen=True, slots=True)
+class PluginInfo:
+    """Stable host-facing projection of one discovered plugin build."""
+
+    id: str
+    version: str | None
+    name: str | None = None
+    maturity: str = "stable"
+    categories: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class WorkspaceOptions:
     allow_write: bool = True
     allow_delete: bool = False

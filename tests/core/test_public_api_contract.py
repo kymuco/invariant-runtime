@@ -20,6 +20,7 @@ _API_PUBLIC = {
     "EphemeralPolicy",
     "ManagedPolicy",
     "PluginError",
+    "PluginInfo",
     "PluginLoadError",
     "PluginNotFoundError",
     "PluginService",

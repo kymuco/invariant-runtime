@@ -27,6 +27,7 @@ Applications embedding Invariant should import from `invariant.api`.
 | Export | Purpose |
 | --- | --- |
 | `PluginService` | High-level host facade for plugin activation and scoped execution. |
+| `PluginInfo` | Immutable host-facing projection of one discovered plugin build. |
 | `BasePolicy` | Base policy contract. |
 | `ManagedPolicy` | Policy for managed service-owned plugin instances. |
 | `EphemeralPolicy` | Policy for execution-scoped runtime state. |
@@ -60,6 +61,44 @@ service = PluginService.from_manifest_paths(
 | `tracer` | `None` | Optional runtime tracer integration. |
 
 Discovery is strict: every discovered manifest plugin must declare an explicit version.
+
+### `service.list_plugins(...)`
+
+Returns an immutable tuple of `PluginInfo` values describing discovered plugin builds without exposing registry descriptors, source objects, loader state, or implementation paths.
+
+```python
+from invariant.api import PluginService
+
+service = PluginService.from_manifest_paths(["plugins"], include_unstable=True)
+try:
+    for plugin in service.list_plugins():
+        print(plugin.id, plugin.version, plugin.maturity)
+finally:
+    service.close()
+```
+
+The public projection contains:
+
+- `id`
+- `version`
+- `name`
+- `maturity`
+- `categories`
+
+Results are ordered deterministically by plugin ID and concrete version. `service.list_plugins(category="audio")` filters by declared category.
+
+This inventory surface is intentionally narrower than `PluginMeta` and does not make `PluginDescriptor` public.
+
+### `service.has_plugin(plugin_id)`
+
+Checks whether a base ID or concrete plugin reference is present in the discovered inventory:
+
+```python
+assert service.has_plugin("example:hello")
+assert service.has_plugin("example:hello@1.0.0")
+```
+
+A missing ID or version returns `False`. Invalid reference syntax still raises the normal validation error. If several local development builds make an unpinned reference ambiguous, `has_plugin(base_id)` still returns `True` because the plugin exists even though activation requires disambiguation.
 
 ### `service.get(plugin_id)`
 
