@@ -10,9 +10,18 @@ import invariant.spec as spec
 
 _ROOT_PUBLIC = {"__version__"}
 _API_PUBLIC = {
+    "AmbiguousPluginReference",
     "BasePolicy",
+    "CapabilityError",
+    "CapabilityNotFound",
+    "CapabilityUnavailableError",
+    "CapabilityVersionMismatch",
+    "DependencyCycleError",
     "EphemeralPolicy",
     "ManagedPolicy",
+    "PluginError",
+    "PluginLoadError",
+    "PluginNotFoundError",
     "PluginService",
     "PolicyProfile",
     "SandboxLimits",

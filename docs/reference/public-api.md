@@ -90,6 +90,49 @@ Creates an execution context bound to a persistent workspace ID.
 
 For policy and capability semantics, read [Security](../security.md) and [Capabilities](capabilities.md).
 
+## Host-facing error contract
+
+Expected runtime failures that a host may need for control flow are exported from `invariant.api` and from the dedicated `invariant.api.errors` module.
+
+| Error | Meaning |
+| --- | --- |
+| `PluginError` | Base class for public plugin-system failures. |
+| `PluginNotFoundError` | Requested plugin ID or concrete version is unavailable. |
+| `PluginLoadError` | A plugin manifest or implementation cannot be loaded under the runtime contract. |
+| `DependencyCycleError` | The requested dependency graph contains a cycle. |
+| `AmbiguousPluginReference` | An unpinned reference cannot select one concrete plugin build. |
+| `CapabilityError` | Base class for capability lookup/version failures. |
+| `CapabilityNotFound` | A requested capability is not registered in the current provider. |
+| `CapabilityVersionMismatch` | The requested capability version does not match the provided contract. |
+| `CapabilityUnavailableError` | The capability exists conceptually but current runtime policy does not allow it. |
+
+For example, a host can treat policy denial as an expected branch without importing execution internals:
+
+```python
+from invariant.api import CapabilityUnavailableError
+
+try:
+    plugin = execution.get("example:notes")
+except CapabilityUnavailableError:
+    # The graph requires authority this execution did not receive.
+    ...
+```
+
+Likewise, plugin lookup can stay on the public facade:
+
+```python
+from invariant.api import PluginNotFoundError
+
+try:
+    plugin = service.get("example:optional-feature")
+except PluginNotFoundError:
+    plugin = None
+```
+
+These public names are identity-preserving aliases of the exception classes used by the runtime. The modules that currently define those classes are implementation details; host code should import the public aliases instead.
+
+Not every internal exception is promoted. Errors that represent implementation-only activation states remain internal until a host-facing recovery contract requires them.
+
 ## Plugin-author API: `invariant.spec`
 
 Plugin implementations and plugin-side tooling should import from `invariant.spec`.
@@ -164,7 +207,7 @@ invariant.ops
 
 Unexported objects inside `invariant.api` and `invariant.spec` are also implementation-level unless a future compatibility contract says otherwise.
 
-Advanced integrations may inspect or use those modules, but direct imports accept a higher compatibility risk during the 0.x line.
+Advanced integrations may inspect or use those modules, but direct imports accept a higher compatibility risk during the 0.x line. Public aliases remain the compatibility surface even when their implementation currently lives in one of these modules.
 
 ## Typing
 
@@ -181,4 +224,5 @@ Invariant ships a `py.typed` marker and inline Python annotations. Type checkers
 
 - [Getting started](../getting-started.md)
 - [Plugin authoring](../guides/plugin-authoring.md)
+- [Dependencies and capabilities](../guides/dependencies-and-capabilities.md)
 - [Manifest v1](manifest-v1.md)
