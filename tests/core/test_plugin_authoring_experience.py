@@ -6,8 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from invariant.api import EphemeralPolicy, PluginService, SandboxLimits
-from invariant.exec.caps.registry import CapabilityUnavailableError
+from invariant.api import (
+    CapabilityUnavailableError,
+    EphemeralPolicy,
+    PluginService,
+    SandboxLimits,
+)
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

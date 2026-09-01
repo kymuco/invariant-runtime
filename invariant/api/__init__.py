@@ -1,3 +1,14 @@
+from invariant.api.errors import (
+    AmbiguousPluginReference,
+    CapabilityError,
+    CapabilityNotFound,
+    CapabilityUnavailableError,
+    CapabilityVersionMismatch,
+    DependencyCycleError,
+    PluginError,
+    PluginLoadError,
+    PluginNotFoundError,
+)
 from invariant.api.policies import (
     BasePolicy,
     EphemeralPolicy,
@@ -15,9 +26,18 @@ from invariant.api.service import PluginService
 from invariant.api.types import WorkspaceOptions
 
 __all__ = [
+    "AmbiguousPluginReference",
     "BasePolicy",
+    "CapabilityError",
+    "CapabilityNotFound",
+    "CapabilityUnavailableError",
+    "CapabilityVersionMismatch",
+    "DependencyCycleError",
     "EphemeralPolicy",
     "ManagedPolicy",
+    "PluginError",
+    "PluginLoadError",
+    "PluginNotFoundError",
     "PluginService",
     "PolicyProfile",
     "SandboxLimits",
