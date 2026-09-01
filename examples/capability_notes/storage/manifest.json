@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "example:notes-storage",
+  "version": "1.0.0",
+  "dependencies": [
+    {
+      "id": "invariant:capability.fs_sandbox@0.2.0",
+      "param": "fs",
+      "scope": "EXECUTION",
+      "optional": false
+    }
+  ],
+  "source": {
+    "code_path": "plugin.py",
+    "class_name": "NotesStoragePlugin"
+  }
+}

@@ -138,6 +138,7 @@ Capabilities govern access through Invariant APIs, but in-process plugins are tr
 | Run a first plugin end to end | [Getting started](getting-started.md) |
 | Learn the four core concepts | [Runtime model](concepts/runtime-model.md) |
 | Grow a production plugin | [Plugin authoring](guides/plugin-authoring.md) |
+| Compose plugins with governed host access | [Dependencies and capabilities](guides/dependencies-and-capabilities.md) |
 | Embed Invariant in an application | [Public API](reference/public-api.md) |
 | Define exact plugin metadata | [Manifest v1](reference/manifest-v1.md) |
 | Work with governed host resources | [Capabilities](reference/capabilities.md) |
@@ -146,4 +147,4 @@ Capabilities govern access through Invariant APIs, but in-process plugins are tr
 
 ## Documentation promise
 
-The site follows four rules: **task first**, **progressive disclosure**, **public imports in user-facing examples**, and **executable truth**. Repository examples, links, rendered-site configuration, and the first-plugin tutorial are covered by regression tests so documentation drift fails with code changes.
+The site follows four rules: **task first**, **progressive disclosure**, **public imports in user-facing examples**, and **executable truth**. Repository examples, links, rendered-site configuration, and checked tutorials are covered by regression tests so documentation drift fails with code changes.

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "example:notes",
+  "version": "1.0.0",
+  "dependencies": [
+    {
+      "id": "example:notes-storage@1.0.0",
+      "param": "storage",
+      "scope": "EXECUTION",
+      "optional": false
+    }
+  ],
+  "source": {
+    "code_path": "plugin.py",
+    "class_name": "NotesPlugin"
+  }
+}
