@@ -28,6 +28,7 @@ Applications embedding Invariant should import from `invariant.api`.
 | --- | --- |
 | `PluginService` | High-level host facade for plugin activation and scoped execution. |
 | `PluginInfo` | Immutable host-facing projection of one discovered plugin build. |
+| `RuntimeObservabilityOptions` | Configuration for Invariant-owned bounded runtime tracing and metrics. |
 | `BasePolicy` | Base policy contract. |
 | `ManagedPolicy` | Policy for managed service-owned plugin instances. |
 | `EphemeralPolicy` | Policy for execution-scoped runtime state. |
@@ -53,12 +54,29 @@ service = PluginService.from_manifest_paths(
 )
 ```
 
+Hosts that want Invariant's standard bounded runtime tracing and metrics can configure it without importing implementation-level `invariant.ops` classes:
+
+```python
+from invariant.api import PluginService, RuntimeObservabilityOptions
+
+service = PluginService.from_manifest_paths(
+    ["plugins"],
+    observability=RuntimeObservabilityOptions(
+        debug_touch_events=True,
+        max_events_per_stream=4000,
+    ),
+)
+```
+
 | Parameter | Default | Meaning |
 | --- | --- | --- |
 | `search_paths` | required | One or more directories recursively searched for `manifest.json`. |
 | `include_unstable` | `False` | Include plugins whose maturity is not `stable`. |
 | `fail_fast` | `True` | Raise on discovery errors instead of logging and skipping them. |
-| `tracer` | `None` | Optional runtime tracer integration. |
+| `tracer` | `None` | Optional custom runtime tracer integration. |
+| `observability` | `None` | Optional `RuntimeObservabilityOptions` for Invariant-owned standard observability. |
+
+`tracer` and `observability` are mutually exclusive. Use `observability` when the host wants the standard runtime-owned implementation without taking a compatibility dependency on concrete tracing or metrics classes.
 
 Discovery is strict: every discovered manifest plugin must declare an explicit version.
 
