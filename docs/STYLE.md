@@ -127,6 +127,30 @@ Prefer direct, precise language. Remove repeated claims, marketing filler, unnec
 
 Simplicity is not the absence of detail. It is placing detail at the depth where it becomes useful.
 
+## Rendered site
+
+The rendered documentation site is a presentation layer over the Markdown sources. Content remains canonical in the repository; site configuration and styling must not create a second source of truth.
+
+Install the documentation toolchain with:
+
+```bash
+python -m pip install -e ".[docs]"
+```
+
+Preview locally:
+
+```bash
+zensical serve
+```
+
+Before merging site or documentation changes, run a clean strict build:
+
+```bash
+zensical build --clean --strict
+```
+
+The documentation generator is pinned in the `docs` optional dependency so local and CI builds are reproducible. It is a development dependency and does not change Invariant's zero-runtime-dependency contract.
+
 ## Page structure
 
 A task-oriented page should usually contain:
@@ -168,4 +192,5 @@ Before merging documentation, ask:
 - Are tutorial snippets synchronized with their canonical example files?
 - Does the page distinguish current capability from future intent?
 - Is the README routing readers instead of duplicating deeper reference material?
+- Does `zensical build --clean --strict` succeed from a clean docs environment?
 - Can any sentence be removed without losing useful information?

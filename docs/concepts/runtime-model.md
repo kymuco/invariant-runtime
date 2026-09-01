@@ -78,32 +78,20 @@ Examples include filesystem access, configuration, HTTP, KV storage, workspace a
 
 Capabilities let a host govern access through explicit interfaces. They are **not** a complete sandbox for hostile Python code.
 
-See [Capabilities](../../CAPABILITIES.md) and [Security](../../SECURITY.md).
+See [Capabilities](../reference/capabilities.md) and [Security](../security.md).
 
 ## What happens behind the service
 
 You do not need these layers to write a first plugin, but they explain the runtime:
 
-```text
-manifest / source
-       │
-       ▼
-   discovery
-       │
-       ▼
-versioned registry
-       │
-       ▼
-dependency resolution
-       │
-       ▼
-plugin construction
-       │
-       ▼
-initialize(resolved_dependencies)
-       │
-       ▼
-active plugin
+```mermaid
+flowchart TD
+    A["Manifest / source"] --> B["Discovery"]
+    B --> C["Versioned registry"]
+    C --> D["Dependency resolution"]
+    D --> E["Plugin construction"]
+    E --> F["initialize(resolved_dependencies)"]
+    F --> G["Active plugin"]
 ```
 
 The internal responsibilities stay separate:
@@ -122,14 +110,10 @@ For a managed plugin, `service.get(...)` activates the plugin on first use and r
 
 On shutdown:
 
-```text
-service.close()
-     │
-     ▼
-shutdown active managed plugins
-     │
-     ▼
-release runtime-owned state
+```mermaid
+flowchart TD
+    A["service.close()"] --> B["Shutdown active managed plugins"]
+    B --> C["Release runtime-owned state"]
 ```
 
 If activation fails, Invariant contains and rolls back runtime-owned lifecycle state where the execution model supports it. Arbitrary external side effects performed by plugin code are not automatically transactional.
@@ -193,4 +177,4 @@ policy-governed capability ≠ hostile-code sandbox
 
 In-process plugins are trusted code. Isolated plugin workers provide dependency and failure separation, but hostile or marketplace code requires stronger external isolation.
 
-Read [Security](../../SECURITY.md) before designing an untrusted-plugin system.
+Read [Security](../security.md) before designing an untrusted-plugin system.

@@ -148,7 +148,7 @@ For a plugin with no isolated Python environment, omit `deps`.
 
 When a plugin needs third-party packages outside the host environment, use the [`deps` section of Manifest v1](../reference/manifest-v1.md#python-environment-dependencies-deps).
 
-Do not treat process isolation as a hostile-code sandbox. See [Security](../../SECURITY.md).
+Do not treat process isolation as a hostile-code sandbox. See [Security](../security.md).
 
 ## Use capabilities for governed host resources
 
@@ -156,7 +156,7 @@ A capability is a runtime-controlled handle to a host resource such as filesyste
 
 If a resource is meant to be governed by host policy, access it through the capability surface rather than bypassing that surface through unrelated host state.
 
-Read [Capabilities](../../CAPABILITIES.md) for the built-in capability contract and security semantics.
+Read [Capabilities](../reference/capabilities.md) for the built-in capability contract and security semantics.
 
 ## Use maturity to control discovery
 
@@ -193,7 +193,7 @@ Before calling a plugin production-ready, check that:
 - dependencies are declared rather than discovered implicitly;
 - governed host resources are reached through capabilities;
 - Python isolation requirements are explicit;
-- trust assumptions match [SECURITY.md](../../SECURITY.md);
+- trust assumptions match [Security](../security.md);
 - the plugin has tests independent of the host product.
 
 ## Reference
@@ -201,4 +201,4 @@ Before calling a plugin production-ready, check that:
 - [Manifest v1](../reference/manifest-v1.md)
 - [Public API](../reference/public-api.md)
 - [Runtime model](../concepts/runtime-model.md)
-- [Capabilities](../../CAPABILITIES.md)
+- [Capabilities](../reference/capabilities.md)

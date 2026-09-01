@@ -210,7 +210,7 @@ Optional pip configuration fields:
 
 Both `requirements` and `wheels_dir` are required. Both paths must exist under the plugin root.
 
-Process isolation is dependency and failure separation, not a complete hostile-code sandbox. Read [Security](../../SECURITY.md) before using isolated plugins with untrusted code.
+Process isolation is dependency and failure separation, not a complete hostile-code sandbox. Read [Security](../security.md) before using isolated plugins with untrusted code.
 
 ## Complete example
 
@@ -265,4 +265,4 @@ The recommended host constructor defaults to `fail_fast=True`, so malformed mani
 - [Getting started](../getting-started.md)
 - [Plugin authoring](../guides/plugin-authoring.md)
 - [Runtime model](../concepts/runtime-model.md)
-- [Capabilities](../../CAPABILITIES.md)
+- [Capabilities](capabilities.md)
