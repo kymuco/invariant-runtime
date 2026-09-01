@@ -23,7 +23,7 @@ from invariant.api.policy_profiles import (
     sandbox_limits_for_profile,
 )
 from invariant.api.service import PluginService
-from invariant.api.types import PluginInfo, WorkspaceOptions
+from invariant.api.types import PluginInfo, RuntimeObservabilityOptions, WorkspaceOptions
 
 __all__ = [
     "AmbiguousPluginReference",
@@ -41,6 +41,7 @@ __all__ = [
     "PluginNotFoundError",
     "PluginService",
     "PolicyProfile",
+    "RuntimeObservabilityOptions",
     "SandboxLimits",
     "WorkspaceOptions",
     "ephemeral_policy_for_profile",
