@@ -25,6 +25,7 @@ _API_PUBLIC = {
     "PluginNotFoundError",
     "PluginService",
     "PolicyProfile",
+    "RuntimeObservabilityOptions",
     "SandboxLimits",
     "WorkspaceOptions",
     "ephemeral_policy_for_profile",
