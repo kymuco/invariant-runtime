@@ -7,7 +7,7 @@ name = "invariant-runtime"
 version = "0.1.0"
 description = "Policy-aware plugin runtime for versioned discovery, dependency resolution, scoped capabilities, and transactional execution."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
@@ -19,6 +19,8 @@ classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
