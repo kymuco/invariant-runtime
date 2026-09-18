@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "dependencies": [
     {
-      "id": "invariant:capability.fs_sandbox@0.2.0",
+      "id": "invariant:capability.fs_sandbox@0.3.0",
       "param": "fs",
       "scope": "EXECUTION",
       "optional": false
