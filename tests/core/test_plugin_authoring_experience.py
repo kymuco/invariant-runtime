@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ from invariant.api import (
     PluginService,
     SandboxLimits,
 )
+from invariant.spec import FS_SANDBOX_CAPABILITY
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -116,3 +118,11 @@ def test_capability_notes_example_stays_on_public_import_surfaces() -> None:
     assert "invariant.exec" not in runner
     assert "invariant.load" not in runner
     assert "invariant.catalog" not in runner
+
+
+def test_checked_capability_notes_manifest_tracks_public_filesystem_contract() -> None:
+    storage_manifest = json.loads(
+        (_CAPABILITY_NOTES_DIR / "storage" / "manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert storage_manifest["dependencies"][0]["id"] == FS_SANDBOX_CAPABILITY.ref
