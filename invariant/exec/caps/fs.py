@@ -314,6 +314,36 @@ class FSAccess:
             self._write_bytes_impl(rel, data, atomic=bool(atomic))
             sp.add(wrote_bytes=len(data))
 
+    def mkdir(
+        self,
+        rel: str | Path,
+        *,
+        parents: bool = True,
+        exist_ok: bool = True,
+    ) -> bool:
+        with self._span(
+            "mkdir",
+            {
+                "path": str(rel),
+                "parents": bool(parents),
+                "exist_ok": bool(exist_ok),
+            },
+        ) as sp:
+            if not self.write:
+                raise FSWriteDenied("Write denied by policy")
+
+            path = self.resolve(rel)
+            root = _norm_root(self.root)
+            _reject_symlink_chain(root, path.parent)
+            if path.exists() or path.is_symlink():
+                _reject_symlink_chain(root, path)
+
+            existed = path.exists()
+            path.mkdir(parents=bool(parents), exist_ok=bool(exist_ok))
+            created = not existed
+            sp.add(created=created, existed=existed)
+            return created
+
     # ---- listing ----
 
     def list_dir(self, rel: str | Path = ".", *, max_entries: int = 10_000) -> list[str]:

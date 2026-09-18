@@ -11,7 +11,7 @@ Capability IDs are namespaced:
 
 Capability references may be version-pinned:
 
-- `invariant:capability.fs_sandbox@0.2.0`
+- `invariant:capability.fs_sandbox@0.3.0`
 
 A declared capability reference is a **requirement**, not authority. The host policy still decides whether a particular execution receives the capability.
 
@@ -25,16 +25,16 @@ Public versioned references:
 from invariant.spec import FS_SANDBOX_CAPABILITY
 
 assert FS_SANDBOX_CAPABILITY.id == "invariant:capability.fs_sandbox"
-assert FS_SANDBOX_CAPABILITY.version == "0.2.0"
-assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.2.0"
+assert FS_SANDBOX_CAPABILITY.version == "0.3.0"
+assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.3.0"
 ```
 
 The built-in plugin-facing references are:
 
 | Public reference | Runtime reference |
 | --- | --- |
-| `FS_SANDBOX_CAPABILITY` | `invariant:capability.fs_sandbox@0.2.0` |
-| `WORKSPACE_CAPABILITY` | `invariant:capability.workspace@0.2.0` |
+| `FS_SANDBOX_CAPABILITY` | `invariant:capability.fs_sandbox@0.3.0` |
+| `WORKSPACE_CAPABILITY` | `invariant:capability.workspace@0.3.0` |
 | `HTTP_CAPABILITY` | `invariant:capability.http@0.1.0` |
 | `KEY_VALUE_CAPABILITY` | `invariant:capability.kv@0.1.0` |
 | `CONFIG_SOURCE_CAPABILITY` | `invariant:capability.config_source@0.1.0` |
@@ -63,7 +63,7 @@ class NotesStoragePlugin(BasePlugin):
         self._fs = fs
 ```
 
-The filesystem Protocol intentionally exposes operations such as `read_text`, `write_text`, `list_dir`, and permission/limit queries. It does **not** expose implementation layout such as an underlying root path or the concrete resolver used internally.
+The filesystem Protocol intentionally exposes operations such as `read_text`, `write_text`, `mkdir`, `list_dir`, and permission/limit queries. It does **not** expose implementation layout such as an underlying root path or the concrete resolver used internally.
 
 A Protocol annotation does not perform capability lookup and does not grant access. Runtime dependency resolution still supplies the actual handle declared by the manifest.
 
@@ -96,7 +96,7 @@ Concrete runtime failures such as a denied filesystem write, blocked HTTP host, 
 
 ## Built-in capabilities
 
-### invariant:capability.fs_sandbox @ 0.2.0
+### invariant:capability.fs_sandbox @ 0.3.0
 
 Execution-scoped filesystem access rooted inside Invariant's execution sandbox.
 
@@ -106,8 +106,9 @@ Properties:
 - byte limits on read/write
 - policy flags: write/delete
 - atomic writes supported
+- governed directory creation through `mkdir(...)`
 
-### invariant:capability.workspace @ 0.2.0
+### invariant:capability.workspace @ 0.3.0
 
 Persistent workspace-scoped filesystem access.
 
@@ -153,7 +154,7 @@ Safe read-only runtime snapshot:
 
 Runtime emits structured events for capability operations on a best-effort, non-failing basis, including:
 
-- `cap.fs.read_bytes`, `cap.fs.write_bytes`
+- `cap.fs.read_bytes`, `cap.fs.write_bytes`, `cap.fs.mkdir`
 - `cap.fs.list_dir`, `cap.fs.delete_file`, `cap.fs.delete_tree`
 - `cap.http.get_*`, `cap.http.post_json`
 - `cap.kv.get`, `cap.kv.set`, `cap.kv.delete`, `cap.kv.list_keys`

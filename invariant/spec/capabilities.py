@@ -39,8 +39,8 @@ class CapabilityRef:
 
 
 INSPECTOR_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}inspector", "0.1.0")
-FS_SANDBOX_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}fs_sandbox", "0.2.0")
-WORKSPACE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}workspace", "0.2.0")
+FS_SANDBOX_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}fs_sandbox", "0.3.0")
+WORKSPACE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}workspace", "0.3.0")
 HTTP_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}http", "0.1.0")
 KEY_VALUE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}kv", "0.1.0")
 CONFIG_SOURCE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}config_source", "0.1.0")
@@ -104,6 +104,14 @@ class FilesystemCapability(Protocol):
         errors: str = "strict",
         atomic: bool = True,
     ) -> None: ...
+
+    def mkdir(
+        self,
+        rel: str | Path,
+        *,
+        parents: bool = True,
+        exist_ok: bool = True,
+    ) -> bool: ...
 
     def list_dir(self, rel: str | Path = ".", *, max_entries: int = 10_000) -> list[str]: ...
 

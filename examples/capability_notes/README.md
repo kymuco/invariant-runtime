@@ -7,7 +7,7 @@ example:notes
     ↓ plugin dependency
 example:notes-storage
     ↓ capability dependency
-invariant:capability.fs_sandbox@0.2.0
+invariant:capability.fs_sandbox@0.3.0
 ```
 
 The host grants sandbox writes through an execution policy. Neither plugin imports the filesystem capability implementation; dependencies arrive through `initialize(...)`.

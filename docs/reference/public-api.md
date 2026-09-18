@@ -197,8 +197,8 @@ Public capability identities, structural types, and broad operation errors also 
 | --- | --- |
 | `CapabilityRef` | Immutable built-in capability ID + concrete contract version. |
 | `BUILTIN_CAPABILITIES` | Enumerated plugin-facing built-in capability references. |
-| `FS_SANDBOX_CAPABILITY` | `fs_sandbox@0.2.0` contract. |
-| `WORKSPACE_CAPABILITY` | `workspace@0.2.0` contract. |
+| `FS_SANDBOX_CAPABILITY` | `fs_sandbox@0.3.0` contract. |
+| `WORKSPACE_CAPABILITY` | `workspace@0.3.0` contract. |
 | `HTTP_CAPABILITY` | `http@0.1.0` contract. |
 | `KEY_VALUE_CAPABILITY` | `kv@0.1.0` contract. |
 | `CONFIG_SOURCE_CAPABILITY` | `config_source@0.1.0` contract. |
@@ -218,7 +218,7 @@ A capability reference is descriptive, not authoritative:
 ```python
 from invariant.spec import FS_SANDBOX_CAPABILITY
 
-assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.2.0"
+assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.3.0"
 ```
 
 The manifest still declares the requirement as data, and the host policy still decides whether the execution receives it.

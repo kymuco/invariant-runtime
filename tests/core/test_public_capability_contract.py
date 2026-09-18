@@ -79,8 +79,8 @@ def test_public_capability_refs_are_canonical_runtime_catalog_contracts() -> Non
 
     assert runtime_public == expected
     assert CAP_AUDIT not in expected
-    assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.2.0"
-    assert WORKSPACE_CAPABILITY.ref == "invariant:capability.workspace@0.2.0"
+    assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.3.0"
+    assert WORKSPACE_CAPABILITY.ref == "invariant:capability.workspace@0.3.0"
     assert HTTP_CAPABILITY.ref == "invariant:capability.http@0.1.0"
     assert KEY_VALUE_CAPABILITY.ref == "invariant:capability.kv@0.1.0"
     assert CONFIG_SOURCE_CAPABILITY.ref == "invariant:capability.config_source@0.1.0"
@@ -147,6 +147,7 @@ def test_operation_failures_are_catchable_through_public_spec_errors(tmp_path: P
 def test_filesystem_protocol_exposes_operations_not_implementation_layout() -> None:
     assert "read_text" in FilesystemCapability.__dict__
     assert "write_text" in FilesystemCapability.__dict__
+    assert "mkdir" in FilesystemCapability.__dict__
     assert "resolve" not in FilesystemCapability.__dict__
     assert "root" not in FilesystemCapability.__dict__
 
