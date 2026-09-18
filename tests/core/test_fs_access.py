@@ -179,3 +179,43 @@ def test_atomic_write_re_raises_after_retry_budget(monkeypatch, tmp_path: Path) 
 
     assert replace_calls["count"] == 10
     assert sleep_calls == [0.02] * 10
+
+
+def test_mkdir_creates_nested_directory_and_reports_creation(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=True)
+
+    created = fs.mkdir("artifacts/output", parents=True, exist_ok=True)
+
+    assert created is True
+    assert (tmp_path / "artifacts" / "output").is_dir()
+
+
+def test_mkdir_existing_directory_reports_not_created(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=True)
+    (tmp_path / "existing").mkdir()
+
+    created = fs.mkdir("existing", exist_ok=True)
+
+    assert created is False
+
+
+def test_mkdir_existing_directory_respects_exist_ok_false(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=True)
+    (tmp_path / "existing").mkdir()
+
+    with pytest.raises(FileExistsError):
+        fs.mkdir("existing", exist_ok=False)
+
+
+def test_mkdir_requires_write_authority(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=False)
+
+    with pytest.raises(FSWriteDenied, match="Write denied"):
+        fs.mkdir("blocked")
+
+
+def test_mkdir_blocks_path_traversal(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=True)
+
+    with pytest.raises(FSPathTraversalBlocked):
+        fs.mkdir("../escape")
