@@ -112,6 +112,29 @@ def test_fs_audit_emits_events_and_records_sizes() -> None:
     assert write_ev["payload"]["bytes"] == 5
 
 
+def test_fs_mkdir_is_audited() -> None:
+    c = Collector()
+    audit = CapabilityAudit(emit=c.emit)
+
+    with tempfile.TemporaryDirectory() as td:
+        fs = FSAccess(root=Path(td), write=True).bind_audit(
+            audit, cap_id="invariant:capability.workspace"
+        )
+
+        created = fs.mkdir("artifacts/output", parents=True, exist_ok=True)
+
+    assert created is True
+    mkdir_events = [(name, event) for name, event in c.find("cap.fs.") if name == "cap.fs.mkdir"]
+    assert len(mkdir_events) == 1
+    _, event = mkdir_events[0]
+    assert event["ok"] is True
+    assert event["payload"]["path"] == "artifacts/output"
+    assert event["payload"]["parents"] is True
+    assert event["payload"]["exist_ok"] is True
+    assert event["payload"]["created"] is True
+    assert event["payload"]["existed"] is False
+
+
 def test_fs_path_traversal_is_audited_as_failure() -> None:
     c = Collector()
     audit = CapabilityAudit(emit=c.emit)
