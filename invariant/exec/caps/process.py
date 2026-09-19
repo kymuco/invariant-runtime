@@ -432,12 +432,18 @@ class ProcessAccess:
 
     @staticmethod
     def _read_state(path: Path) -> dict[str, Any]:
-        try:
-            return dict(json.loads(path.read_text(encoding="utf-8")))
-        except FileNotFoundError as exc:
-            raise ProcessAccessError("process handle not found") from exc
-        except (TypeError, ValueError) as exc:
-            raise ProcessAccessError("invalid durable process state") from exc
+        for attempt in range(10):
+            try:
+                return dict(json.loads(path.read_text(encoding="utf-8")))
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(0.02)
+            except FileNotFoundError as exc:
+                raise ProcessAccessError("process handle not found") from exc
+            except (TypeError, ValueError) as exc:
+                raise ProcessAccessError("invalid durable process state") from exc
+        raise AssertionError("unreachable")
 
     def _reconcile_state(self, state: Mapping[str, Any], state_path: Path) -> dict[str, Any]:
         reconciled = dict(state)

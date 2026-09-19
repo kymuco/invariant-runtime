@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from invariant.exec.caps import process_worker
 from invariant.exec.caps.audit import CapabilityAudit
 from invariant.exec.caps.fs import FSAccess
 from invariant.api.policies import SandboxLimits
@@ -353,3 +354,67 @@ def test_process_start_audit_omits_key_arguments_and_env_values(tmp_path: Path) 
     assert "super-secret-operation-key" not in rendered
     assert "secret-command-value" not in rendered
     assert "super-secret-env-value" not in rendered
+
+
+
+def test_process_state_read_retries_transient_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    process = _process(tmp_path)
+    handle = process._handle_for_key("operation-read-race-001")
+    paths = process._durable_paths(handle)
+    expected = {
+        "handle": handle,
+        "request_digest": "digest",
+        "cwd": ".",
+        "status": "reserved",
+        "running": False,
+    }
+    process._reserve_state(paths["state"], expected)
+
+    original_read_text = Path.read_text
+    attempts = 0
+
+    def flaky_read_text(path: Path, *args, **kwargs):
+        nonlocal attempts
+        if path == paths["state"] and attempts < 2:
+            attempts += 1
+            raise PermissionError("transient Windows sharing violation")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", flaky_read_text)
+
+    recovered = process._read_state(paths["state"])
+
+    assert recovered["handle"] == handle
+    assert recovered["status"] == "reserved"
+    assert attempts == 2
+
+
+def test_process_worker_state_read_retries_transient_permission_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "worker-state.json"
+    state_path.write_text(
+        '{"status": "running", "running": true}',
+        encoding="utf-8",
+    )
+
+    original_read_text = Path.read_text
+    attempts = 0
+
+    def flaky_read_text(path: Path, *args, **kwargs):
+        nonlocal attempts
+        if path == state_path and attempts < 2:
+            attempts += 1
+            raise PermissionError("transient Windows sharing violation")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", flaky_read_text)
+
+    recovered = process_worker._read_state(state_path)
+
+    assert recovered == {"status": "running", "running": True}
+    assert attempts == 2

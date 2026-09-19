@@ -16,7 +16,14 @@ def _utc_now() -> str:
 
 
 def _read_state(path: Path) -> dict[str, Any]:
-    return dict(json.loads(path.read_text(encoding="utf-8")))
+    for attempt in range(10):
+        try:
+            return dict(json.loads(path.read_text(encoding="utf-8")))
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.02)
+    raise AssertionError("unreachable")
 
 
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
