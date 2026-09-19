@@ -338,11 +338,16 @@ class FSAccess:
             if path.exists() or path.is_symlink():
                 _reject_symlink_chain(root, path)
 
-            existed = path.exists()
-            path.mkdir(parents=bool(parents), exist_ok=bool(exist_ok))
-            created = not existed
-            sp.add(created=created, existed=existed)
-            return created
+            try:
+                path.mkdir(parents=bool(parents), exist_ok=False)
+            except FileExistsError:
+                if not bool(exist_ok):
+                    raise
+                sp.add(created=False, existed=True)
+                return False
+
+            sp.add(created=True, existed=False)
+            return True
 
     # ---- listing ----
 
