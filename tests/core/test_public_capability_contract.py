@@ -17,10 +17,12 @@ from invariant.exec.caps.ids import (
     CAP_INSPECTOR,
     CAP_KV,
     CAP_PREFIX,
+    CAP_PROCESS,
     CAP_WORKSPACE,
 )
 from invariant.exec.caps.inspector import RuntimeInspector
 from invariant.exec.caps.kv import KVStore
+from invariant.exec.caps.process import ProcessAccess
 from invariant.spec import (
     BUILTIN_CAPABILITIES,
     CONFIG_SOURCE_CAPABILITY,
@@ -28,6 +30,7 @@ from invariant.spec import (
     HTTP_CAPABILITY,
     INSPECTOR_CAPABILITY,
     KEY_VALUE_CAPABILITY,
+    PROCESS_CAPABILITY,
     WORKSPACE_CAPABILITY,
     CapabilityOperationError,
     CapabilityRef,
@@ -38,6 +41,8 @@ from invariant.spec import (
     HttpCapabilityError,
     KeyValueCapability,
     KeyValueCapabilityError,
+    ProcessCapability,
+    ProcessCapabilityError,
     RuntimeInspectorCapability,
 )
 from invariant.spec import capabilities as public_capabilities
@@ -59,6 +64,9 @@ _PUBLIC_CAPABILITY_NAMES = {
     "KEY_VALUE_CAPABILITY",
     "KeyValueCapability",
     "KeyValueCapabilityError",
+    "PROCESS_CAPABILITY",
+    "ProcessCapability",
+    "ProcessCapabilityError",
     "RuntimeInspectorCapability",
     "WORKSPACE_CAPABILITY",
 }
@@ -83,6 +91,7 @@ def test_public_capability_refs_are_canonical_runtime_catalog_contracts() -> Non
     assert WORKSPACE_CAPABILITY.ref == "invariant:capability.workspace@0.3.0"
     assert HTTP_CAPABILITY.ref == "invariant:capability.http@0.1.0"
     assert KEY_VALUE_CAPABILITY.ref == "invariant:capability.kv@0.1.0"
+    assert PROCESS_CAPABILITY.ref == "invariant:capability.process@0.1.0"
     assert CONFIG_SOURCE_CAPABILITY.ref == "invariant:capability.config_source@0.1.0"
     assert INSPECTOR_CAPABILITY.ref == "invariant:capability.inspector@0.1.0"
 
@@ -93,6 +102,7 @@ def test_legacy_runtime_ids_are_shims_over_public_contracts() -> None:
     assert CAP_WORKSPACE == WORKSPACE_CAPABILITY.id
     assert CAP_HTTP == HTTP_CAPABILITY.id
     assert CAP_KV == KEY_VALUE_CAPABILITY.id
+    assert CAP_PROCESS == PROCESS_CAPABILITY.id
     assert CAP_CONFIG_SOURCE == CONFIG_SOURCE_CAPABILITY.id
     assert CAP_INSPECTOR == INSPECTOR_CAPABILITY.id
 
@@ -116,12 +126,14 @@ def test_runtime_implementations_satisfy_public_protocols(tmp_path: Path) -> Non
     fs = FSAccess(root=tmp_path, write=True)
     http = HttpAccess(allow_hosts=())
     kv = KVStore(fs=fs)
+    process = ProcessAccess(workspace=fs)
     config = EnvDictConfigSource({"example.value": 1})
     inspector = RuntimeInspector(registry=object(), runtime=object())
 
     assert isinstance(fs, FilesystemCapability)
     assert isinstance(http, HttpCapability)
     assert isinstance(kv, KeyValueCapability)
+    assert isinstance(process, ProcessCapability)
     assert isinstance(config, ConfigSourceCapability)
     assert isinstance(inspector, RuntimeInspectorCapability)
 
@@ -130,6 +142,7 @@ def test_operation_failures_are_catchable_through_public_spec_errors(tmp_path: P
     assert issubclass(FilesystemCapabilityError, CapabilityOperationError)
     assert issubclass(HttpCapabilityError, CapabilityOperationError)
     assert issubclass(KeyValueCapabilityError, CapabilityOperationError)
+    assert issubclass(ProcessCapabilityError, CapabilityOperationError)
 
     with pytest.raises(FilesystemCapabilityError, match="Write denied"):
         FSAccess(root=tmp_path).write_text("note.txt", "blocked")
@@ -150,6 +163,10 @@ def test_filesystem_protocol_exposes_operations_not_implementation_layout() -> N
     assert "mkdir" in FilesystemCapability.__dict__
     assert "resolve" not in FilesystemCapability.__dict__
     assert "root" not in FilesystemCapability.__dict__
+
+    assert "run" in ProcessCapability.__dict__
+    assert "root" not in ProcessCapability.__dict__
+    assert "resolve" not in ProcessCapability.__dict__
 
     source = (Path(spec.__file__).with_name("capabilities.py")).read_text(encoding="utf-8")
     assert "invariant.exec" not in source
