@@ -43,7 +43,7 @@ FS_SANDBOX_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}fs_sandbox", "0.3.0")
 WORKSPACE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}workspace", "0.3.0")
 HTTP_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}http", "0.1.0")
 KEY_VALUE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}kv", "0.1.0")
-PROCESS_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}process", "0.1.0")
+PROCESS_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}process", "0.2.0")
 CONFIG_SOURCE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}config_source", "0.1.0")
 
 BUILTIN_CAPABILITIES: tuple[CapabilityRef, ...] = (
@@ -173,7 +173,7 @@ class KeyValueCapability(Protocol):
 
 @runtime_checkable
 class ProcessCapability(Protocol):
-    """Workspace-bound synchronous process execution contract."""
+    """Workspace-bound process execution contract."""
 
     def run(
         self,
@@ -182,6 +182,32 @@ class ProcessCapability(Protocol):
         cwd: str | Path = ".",
         timeout_s: float | None = None,
         env: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]: ...
+
+    def start(
+        self,
+        key: str,
+        command: Sequence[str],
+        *,
+        cwd: str | Path = ".",
+        env: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]: ...
+
+    def status(self, handle: str) -> dict[str, Any]: ...
+
+    def terminate(
+        self,
+        handle: str,
+        *,
+        kill: bool = False,
+        wait_s: float = 5.0,
+    ) -> dict[str, Any]: ...
+
+    def read_output(
+        self,
+        handle: str,
+        *,
+        max_chars: int | None = None,
     ) -> dict[str, Any]: ...
 
 
