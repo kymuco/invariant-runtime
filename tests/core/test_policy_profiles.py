@@ -40,6 +40,9 @@ def test_sandbox_limits_for_profile_defaults() -> None:
     assert dev.allow_network is False
     assert stage.allow_network is False
     assert prod.allow_network is False
+    assert dev.allow_process is True
+    assert stage.allow_process is False
+    assert prod.allow_process is False
     assert dev.http_allow_any_host is False
     assert stage.http_allow_any_host is False
     assert prod.http_allow_any_host is False
@@ -53,12 +56,18 @@ def test_sandbox_limits_for_profile_overrides() -> None:
         "prod",
         overrides={
             "allow_network": True,
+            "allow_process": True,
+            "process_max_timeout_s": 30.0,
+            "process_max_output_chars": 5_000,
             "http_allow_hosts": ["api.openai.com", "example.com"],
             "allow_env_config": True,
             "config_env_prefix": "APP_",
         },
     )
     assert limits.allow_network is True
+    assert limits.allow_process is True
+    assert limits.process_max_timeout_s == 30.0
+    assert limits.process_max_output_chars == 5_000
     assert limits.http_allow_hosts == ("api.openai.com", "example.com")
     assert limits.allow_env_config is True
     assert limits.config_env_prefix == "APP_"
