@@ -7,11 +7,15 @@ import pytest
 
 from invariant.exec.caps.audit import CapabilityAudit
 from invariant.exec.caps.fs import FSAccess
+from invariant.api.policies import SandboxLimits
+from invariant.exec.caps.ids import CAP_PROCESS
+from invariant.exec.caps.policy import CapabilityPolicy, CapabilityPolicyContext
 from invariant.exec.caps.process import (
     ProcessAccess,
     ProcessAccessError,
     ProcessTimeoutLimitExceeded,
 )
+from invariant.spec.modes import InstanceMode
 
 
 class Collector:
@@ -129,3 +133,23 @@ def test_process_run_audit_omits_command_arguments_and_env_values(tmp_path: Path
     assert payload["cwd"] == "."
     assert payload["env_override_count"] == 1
     assert payload["timed_out"] is False
+
+
+def test_process_capability_visibility_requires_host_policy_gate() -> None:
+    policy = CapabilityPolicy()
+
+    denied = policy.build_view_rules(
+        ctx=CapabilityPolicyContext(
+            instance_mode=InstanceMode.EPHEMERAL,
+            limits=SandboxLimits(allow_process=False),
+        )
+    )
+    allowed = policy.build_view_rules(
+        ctx=CapabilityPolicyContext(
+            instance_mode=InstanceMode.EPHEMERAL,
+            limits=SandboxLimits(allow_process=True),
+        )
+    )
+
+    assert CAP_PROCESS in denied["deny"]
+    assert CAP_PROCESS not in allowed["deny"]
