@@ -7,9 +7,9 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Self
 
@@ -165,7 +165,6 @@ class ProcessAccess:
         initial = {
             "handle": handle,
             "request_digest": request_digest,
-            "command": argv,
             "cwd": cwd_rel,
             "runner_pid": None,
             "child_pid": None,
