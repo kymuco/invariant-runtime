@@ -294,6 +294,13 @@ class ProcessAccess:
                 time.sleep(0.05)
                 current = self.status(normalized)
 
+            if current["running"] and os.name == "nt" and not bool(kill):
+                self._terminate_pid(child_pid, kill=True)
+                forced_deadline = time.perf_counter() + max(wait_timeout, 1.0)
+                while current["running"] and time.perf_counter() < forced_deadline:
+                    time.sleep(0.05)
+                    current = self.status(normalized)
+
             current["terminated"] = not bool(current["running"])
             current["kill"] = bool(kill)
             sp.add(terminated=current["terminated"], status=current["status"])
@@ -550,9 +557,13 @@ class ProcessAccess:
     @staticmethod
     def _terminate_pid(process_id: int, *, kill: bool) -> None:
         if os.name == "nt":
-            command = ["taskkill", "/PID", str(process_id), "/T"]
-            if kill:
-                command.append("/F")
+            if not kill:
+                try:
+                    os.kill(process_id, signal.SIGTERM)
+                    return
+                except OSError:
+                    pass
+            command = ["taskkill", "/PID", str(process_id), "/T", "/F"]
             subprocess.run(
                 command,
                 stdout=subprocess.DEVNULL,
