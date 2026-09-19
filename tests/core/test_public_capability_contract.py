@@ -91,7 +91,7 @@ def test_public_capability_refs_are_canonical_runtime_catalog_contracts() -> Non
     assert WORKSPACE_CAPABILITY.ref == "invariant:capability.workspace@0.3.0"
     assert HTTP_CAPABILITY.ref == "invariant:capability.http@0.1.0"
     assert KEY_VALUE_CAPABILITY.ref == "invariant:capability.kv@0.1.0"
-    assert PROCESS_CAPABILITY.ref == "invariant:capability.process@0.1.0"
+    assert PROCESS_CAPABILITY.ref == "invariant:capability.process@0.2.0"
     assert CONFIG_SOURCE_CAPABILITY.ref == "invariant:capability.config_source@0.1.0"
     assert INSPECTOR_CAPABILITY.ref == "invariant:capability.inspector@0.1.0"
 
@@ -165,6 +165,10 @@ def test_filesystem_protocol_exposes_operations_not_implementation_layout() -> N
     assert "root" not in FilesystemCapability.__dict__
 
     assert "run" in ProcessCapability.__dict__
+    assert "start" in ProcessCapability.__dict__
+    assert "status" in ProcessCapability.__dict__
+    assert "terminate" in ProcessCapability.__dict__
+    assert "read_output" in ProcessCapability.__dict__
     assert "root" not in ProcessCapability.__dict__
     assert "resolve" not in ProcessCapability.__dict__
 
