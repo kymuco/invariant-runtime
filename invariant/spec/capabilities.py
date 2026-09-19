@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -43,6 +43,7 @@ FS_SANDBOX_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}fs_sandbox", "0.3.0")
 WORKSPACE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}workspace", "0.3.0")
 HTTP_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}http", "0.1.0")
 KEY_VALUE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}kv", "0.1.0")
+PROCESS_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}process", "0.1.0")
 CONFIG_SOURCE_CAPABILITY = CapabilityRef(f"{CAPABILITY_PREFIX}config_source", "0.1.0")
 
 BUILTIN_CAPABILITIES: tuple[CapabilityRef, ...] = (
@@ -51,6 +52,7 @@ BUILTIN_CAPABILITIES: tuple[CapabilityRef, ...] = (
     HTTP_CAPABILITY,
     INSPECTOR_CAPABILITY,
     KEY_VALUE_CAPABILITY,
+    PROCESS_CAPABILITY,
     WORKSPACE_CAPABILITY,
 )
 
@@ -69,6 +71,10 @@ class HttpCapabilityError(CapabilityOperationError):
 
 class KeyValueCapabilityError(CapabilityOperationError):
     """A key-value capability operation failed."""
+
+
+class ProcessCapabilityError(CapabilityOperationError):
+    """A process capability operation failed."""
 
 
 @runtime_checkable
@@ -166,6 +172,20 @@ class KeyValueCapability(Protocol):
 
 
 @runtime_checkable
+class ProcessCapability(Protocol):
+    """Workspace-bound synchronous process execution contract."""
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: str | Path = ".",
+        timeout_s: float | None = None,
+        env: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
 class ConfigSourceCapability(Protocol):
     """Plugin-facing read-only configuration contract."""
 
@@ -207,6 +227,9 @@ __all__ = [
     "KEY_VALUE_CAPABILITY",
     "KeyValueCapability",
     "KeyValueCapabilityError",
+    "PROCESS_CAPABILITY",
+    "ProcessCapability",
+    "ProcessCapabilityError",
     "RuntimeInspectorCapability",
     "WORKSPACE_CAPABILITY",
 ]

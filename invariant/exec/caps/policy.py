@@ -11,6 +11,7 @@ from invariant.exec.caps.ids import (
     CAP_HTTP,
     CAP_INSPECTOR,
     CAP_KV,
+    CAP_PROCESS,
     CAP_WORKSPACE,
 )
 from invariant.spec.modes import InstanceMode
@@ -103,6 +104,10 @@ class CapabilityPolicy:
         # Network is opt-in.
         if not _read_bool(limits, "allow_network", False):
             deny.add(CAP_HTTP)
+
+        # Process execution is opt-in.
+        if not _read_bool(limits, "allow_process", False):
+            deny.add(CAP_PROCESS)
 
         # KV is opt-in (default True in твоём коде, но пусть policy тоже держит оборону).
         if not _read_bool(limits, "allow_kv", True):

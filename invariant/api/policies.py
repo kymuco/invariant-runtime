@@ -32,6 +32,9 @@ class SandboxLimits:
 
     # --- new: network/process gates ---
     allow_network: bool = False
+    allow_process: bool = False
+    process_max_timeout_s: float = 120.0
+    process_max_output_chars: int = 40_000
     http_allow_hosts: tuple[str, ...] = ()
     http_timeout_s: float = 10.0
     http_max_bytes: int = 2_000_000
@@ -55,6 +58,10 @@ class SandboxLimits:
             raise ValueError("workspace_max_read_bytes must be > 0")
         if self.workspace_max_write_bytes <= 0:
             raise ValueError("workspace_max_write_bytes must be > 0")
+        if self.process_max_timeout_s <= 0:
+            raise ValueError("process_max_timeout_s must be > 0")
+        if self.process_max_output_chars <= 0:
+            raise ValueError("process_max_output_chars must be > 0")
         if self.http_max_bytes <= 0:
             raise ValueError("http_max_bytes must be > 0")
         if self.kv_max_bytes <= 0:

@@ -5,6 +5,7 @@ from invariant.spec.capabilities import (
     HTTP_CAPABILITY,
     INSPECTOR_CAPABILITY,
     KEY_VALUE_CAPABILITY,
+    PROCESS_CAPABILITY,
     WORKSPACE_CAPABILITY,
     CapabilityOperationError,
     CapabilityRef,
@@ -15,6 +16,8 @@ from invariant.spec.capabilities import (
     HttpCapabilityError,
     KeyValueCapability,
     KeyValueCapabilityError,
+    ProcessCapability,
+    ProcessCapabilityError,
     RuntimeInspectorCapability,
 )
 from invariant.spec.context import PluginContext
@@ -43,7 +46,10 @@ __all__ = [
     "KEY_VALUE_CAPABILITY",
     "KeyValueCapability",
     "KeyValueCapabilityError",
+    "PROCESS_CAPABILITY",
     "PluginContext",
+    "ProcessCapability",
+    "ProcessCapabilityError",
     "PluginMeta",
     "RuntimeInspectorCapability",
     "Version",

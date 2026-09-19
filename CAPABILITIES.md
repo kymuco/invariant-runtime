@@ -37,6 +37,7 @@ The built-in plugin-facing references are:
 | `WORKSPACE_CAPABILITY` | `invariant:capability.workspace@0.3.0` |
 | `HTTP_CAPABILITY` | `invariant:capability.http@0.1.0` |
 | `KEY_VALUE_CAPABILITY` | `invariant:capability.kv@0.1.0` |
+| `PROCESS_CAPABILITY` | `invariant:capability.process@0.1.0` |
 | `CONFIG_SOURCE_CAPABILITY` | `invariant:capability.config_source@0.1.0` |
 | `INSPECTOR_CAPABILITY` | `invariant:capability.inspector@0.1.0` |
 
@@ -49,6 +50,7 @@ The built-in plugin-facing references are:
 - `FilesystemCapability`
 - `HttpCapability`
 - `KeyValueCapability`
+- `ProcessCapability`
 - `ConfigSourceCapability`
 - `RuntimeInspectorCapability`
 
@@ -79,6 +81,7 @@ There are two different failure boundaries.
 - `FilesystemCapabilityError`
 - `HttpCapabilityError`
 - `KeyValueCapabilityError`
+- `ProcessCapabilityError`
 
 Concrete runtime failures such as a denied filesystem write, blocked HTTP host, or corrupt KV store remain implementation-specific subclasses of those broad contracts.
 
@@ -134,6 +137,21 @@ Simple JSON-backed key-value storage over an execution/workspace filesystem capa
 
 The capability is only available when policy permits the storage path it requires.
 
+### invariant:capability.process @ 0.1.0
+
+Workspace-bound synchronous process execution.
+
+Properties:
+
+- available only when the execution has a workspace and host policy enables process access
+- relative cwd is resolved and confined inside the hidden workspace root
+- timeout is capped by host policy
+- stdout/stderr are bounded by host policy
+- command arguments and environment values are not part of the capability audit payload
+- the capability does not expose the workspace root or resolver to plugin code
+
+A capability grant is still not human authorization. Product-level admission remains upstream of Invariant.
+
 ### invariant:capability.config_source @ 0.1.0
 
 Read-only configuration source for plugins:
@@ -157,6 +175,7 @@ Runtime emits structured events for capability operations on a best-effort, non-
 - `cap.fs.read_bytes`, `cap.fs.write_bytes`, `cap.fs.mkdir`
 - `cap.fs.list_dir`, `cap.fs.delete_file`, `cap.fs.delete_tree`
 - `cap.http.get_*`, `cap.http.post_json`
+- `cap.process.run`
 - `cap.kv.get`, `cap.kv.set`, `cap.kv.delete`, `cap.kv.list_keys`
 
 Events contain the capability ID and operation metadata. Sensitive values should not be treated as part of the audit contract.

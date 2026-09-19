@@ -13,6 +13,7 @@ from invariant.exec.caps.ids import (
     CAP_INSPECTOR,
     CAP_KV,
     CAP_PREFIX,
+    CAP_PROCESS,
     CAP_WORKSPACE,
 )
 from invariant.spec.capabilities import (
@@ -21,6 +22,7 @@ from invariant.spec.capabilities import (
     HTTP_CAPABILITY,
     INSPECTOR_CAPABILITY,
     KEY_VALUE_CAPABILITY,
+    PROCESS_CAPABILITY,
     WORKSPACE_CAPABILITY,
 )
 from invariant.spec.versioning import canon_version_key
@@ -99,6 +101,15 @@ CATALOG: dict[str, CapabilitySpec] = {
         description="JSON-backed KV store with corruption detection and optional repair-on-write.",
         events_prefix="cap.kv.",
         limits={"file_max_bytes": "bytes"},
+    ),
+    CAP_PROCESS: CapabilitySpec(
+        cap_id=CAP_PROCESS,
+        version=PROCESS_CAPABILITY.version,
+        title="Workspace process runner",
+        description="Workspace-bound synchronous process execution with timeout and output limits.",
+        events_prefix="cap.process.",
+        limits={"timeout_s": "seconds", "max_output_chars": "chars"},
+        notes="Execution-scoped and denied unless process access is enabled by host policy.",
     ),
     CAP_CONFIG_SOURCE: CapabilitySpec(
         cap_id=CAP_CONFIG_SOURCE,
