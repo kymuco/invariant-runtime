@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -219,3 +220,14 @@ def test_mkdir_blocks_path_traversal(tmp_path: Path) -> None:
 
     with pytest.raises(FSPathTraversalBlocked):
         fs.mkdir("../escape")
+
+
+
+def test_mkdir_reports_exactly_one_creator_under_race(tmp_path: Path) -> None:
+    fs = _mk_fs(tmp_path, write=True)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _index: fs.mkdir("reservation", exist_ok=True), range(16)))
+
+    assert results.count(True) == 1
+    assert results.count(False) == 15
