@@ -63,6 +63,10 @@ def main() -> int:
 
     config_path = Path(sys.argv[1]).resolve()
     config = dict(json.loads(config_path.read_text(encoding="utf-8")))
+    try:
+        config_path.unlink()
+    except OSError:
+        pass
     state_path = Path(str(config["state_path"])).resolve()
     stdout_path = Path(str(config["stdout_path"])).resolve()
     stderr_path = Path(str(config["stderr_path"])).resolve()
