@@ -201,17 +201,20 @@ Public capability identities, structural types, and broad operation errors also 
 | `WORKSPACE_CAPABILITY` | `workspace@0.3.0` contract. |
 | `HTTP_CAPABILITY` | `http@0.1.0` contract. |
 | `KEY_VALUE_CAPABILITY` | `kv@0.1.0` contract. |
+| `PROCESS_CAPABILITY` | `process@0.1.0` workspace-bound process contract. |
 | `CONFIG_SOURCE_CAPABILITY` | `config_source@0.1.0` contract. |
 | `INSPECTOR_CAPABILITY` | `inspector@0.1.0` contract. |
 | `FilesystemCapability` | Structural filesystem operations available to plugin code. |
 | `HttpCapability` | Structural governed HTTP operations. |
 | `KeyValueCapability` | Structural key-value operations. |
+| `ProcessCapability` | Structural workspace-bound synchronous process execution. |
 | `ConfigSourceCapability` | Structural read-only configuration operations. |
 | `RuntimeInspectorCapability` | Structural read-only runtime inspection operations. |
 | `CapabilityOperationError` | Base error after a capability handle has been granted. |
 | `FilesystemCapabilityError` | Broad filesystem operation failure. |
 | `HttpCapabilityError` | Broad HTTP operation failure. |
 | `KeyValueCapabilityError` | Broad key-value operation failure. |
+| `ProcessCapabilityError` | Broad process capability operation failure. |
 
 A capability reference is descriptive, not authoritative:
 
@@ -234,7 +237,7 @@ class NotesStoragePlugin(BasePlugin):
         self._fs = fs
 ```
 
-`FilesystemCapability` intentionally omits concrete implementation layout such as an underlying root path or internal resolver. It describes operations the plugin may rely on, not how the runtime implements them.
+`FilesystemCapability` intentionally omits concrete implementation layout such as an underlying root path or internal resolver. `ProcessCapability` follows the same rule: it accepts workspace-relative cwd values and never exposes the workspace host path. These contracts describe operations the plugin may rely on, not how the runtime implements them.
 
 If a granted handle later fails an operation, plugin code can catch a broad contract error without importing `invariant.exec`:
 
