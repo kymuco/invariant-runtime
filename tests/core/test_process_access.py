@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from invariant.exec.caps.policy import CapabilityPolicy, CapabilityPolicyContext
 from invariant.exec.caps.process import (
     ProcessAccess,
     ProcessAccessError,
+    ProcessIdentityConflict,
     ProcessTimeoutLimitExceeded,
 )
 from invariant.spec.modes import InstanceMode
@@ -170,3 +172,184 @@ def test_process_capability_visibility_requires_host_policy_gate() -> None:
 
     assert CAP_PROCESS in denied["deny"]
     assert CAP_PROCESS not in allowed["deny"]
+
+
+
+def _wait_terminal(process: ProcessAccess, handle: str, *, timeout_s: float = 5.0) -> dict[str, object]:
+    deadline = time.perf_counter() + timeout_s
+    current = process.status(handle)
+    while current["running"] and time.perf_counter() < deadline:
+        time.sleep(0.05)
+        current = process.status(handle)
+    return current
+
+
+def test_process_start_replay_reuses_same_durable_handle_without_respawn(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "marker.txt"
+    worker = tmp_path / "worker.py"
+    worker.write_text(
+        (
+            "from pathlib import Path\n"
+            "import time\n"
+            "p = Path('marker.txt')\n"
+            "p.write_text((p.read_text() if p.exists() else '') + 'spawned\\n')\n"
+            "time.sleep(0.3)\n"
+        ),
+        encoding="utf-8",
+    )
+    process = _process(tmp_path)
+
+    first = process.start("operation-replay-001", [sys.executable, "worker.py"])
+
+    def forbidden_popen(*_args, **_kwargs):
+        raise AssertionError("replay must not launch another process worker")
+
+    monkeypatch.setattr("invariant.exec.caps.process.subprocess.Popen", forbidden_popen)
+    replay = process.start("operation-replay-001", [sys.executable, "worker.py"])
+
+    assert replay["handle"] == first["handle"]
+    assert replay["reused"] is True
+
+    terminal = _wait_terminal(process, first["handle"])
+    assert terminal["status"] == "exited"
+    assert marker.read_text(encoding="utf-8").splitlines() == ["spawned"]
+
+
+def test_process_start_rejects_same_key_with_different_request(tmp_path: Path) -> None:
+    process = _process(tmp_path)
+    first = process.start(
+        "operation-conflict-001",
+        [sys.executable, "-c", "import time; time.sleep(0.2)"],
+    )
+
+    with pytest.raises(ProcessIdentityConflict, match="different request"):
+        process.start(
+            "operation-conflict-001",
+            [sys.executable, "-c", "print('different')"],
+        )
+
+    terminal = _wait_terminal(process, first["handle"])
+    assert terminal["status"] == "exited"
+
+
+def test_process_status_survives_new_process_access_instance(tmp_path: Path) -> None:
+    first_access = _process(tmp_path)
+    started = first_access.start(
+        "operation-restart-001",
+        [sys.executable, "-c", "import time; time.sleep(0.3)"],
+    )
+
+    second_access = _process(tmp_path)
+    recovered = second_access.status(started["handle"])
+
+    assert recovered["handle"] == started["handle"]
+    assert recovered["status"] in {"reserved", "starting", "running", "exited"}
+
+    terminal = _wait_terminal(second_access, started["handle"])
+    assert terminal["status"] == "exited"
+    assert terminal["returncode"] == 0
+
+
+def test_process_background_output_is_bounded(tmp_path: Path) -> None:
+    process = _process(tmp_path, max_output_chars=10)
+    started = process.start(
+        "operation-output-001",
+        [sys.executable, "-c", "print('x' * 100, end='')"],
+    )
+    terminal = _wait_terminal(process, started["handle"])
+    assert terminal["status"] == "exited"
+
+    output = process.read_output(started["handle"])
+    assert output["stdout"] == "x" * 10
+    assert output["stdout_truncated"] is True
+    assert output["stderr"] == ""
+
+
+def test_process_background_terminate_is_owned_by_capability(tmp_path: Path) -> None:
+    process = _process(tmp_path)
+    started = process.start(
+        "operation-terminate-001",
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+    )
+
+    deadline = time.perf_counter() + 5.0
+    current = process.status(started["handle"])
+    while current["status"] != "running" and time.perf_counter() < deadline:
+        time.sleep(0.05)
+        current = process.status(started["handle"])
+
+    terminated = process.terminate(started["handle"], kill=True, wait_s=5.0)
+
+    assert terminated["terminated"] is True
+    assert terminated["running"] is False
+    assert terminated["status"] in {"exited", "unknown"}
+
+
+def test_process_stale_reserved_state_becomes_unknown_without_restart(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    process = _process(tmp_path)
+    key = "operation-unknown-001"
+    handle = process._handle_for_key(key)
+    paths = process._durable_paths(handle)
+    process._reserve_state(
+        paths["state"],
+        {
+            "handle": handle,
+            "request_digest": "digest",
+            "command": [sys.executable, "-c", "print('never')"],
+            "cwd": ".",
+            "runner_pid": None,
+            "child_pid": None,
+            "status": "reserved",
+            "running": False,
+            "returncode": None,
+            "reserved_at": "2000-01-01T00:00:00+00:00",
+            "started_at": None,
+            "finished_at": None,
+            "reconciled_at": None,
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+            "error": None,
+        },
+    )
+
+    def forbidden_popen(*_args, **_kwargs):
+        raise AssertionError("status reconciliation must never restart")
+
+    monkeypatch.setattr("invariant.exec.caps.process.subprocess.Popen", forbidden_popen)
+    recovered = process.status(handle)
+
+    assert recovered["status"] == "unknown"
+    assert recovered["running"] is False
+    assert recovered["error"]["type"] == "ProcessOutcomeUnknown"
+
+
+def test_process_start_audit_omits_key_arguments_and_env_values(tmp_path: Path) -> None:
+    collector = Collector()
+    process = _process(tmp_path).bind_audit(
+        CapabilityAudit(emit=collector.emit),
+        cap_id="invariant:capability.process",
+    )
+
+    started = process.start(
+        "super-secret-operation-key",
+        [sys.executable, "-c", "print('secret-command-value')"],
+        env={"SECRET_TOKEN": "super-secret-env-value"},
+    )
+    _wait_terminal(process, started["handle"])
+
+    starts = [
+        payload
+        for name, payload in collector.events
+        if name == "cap.process.start"
+    ]
+    assert len(starts) == 1
+    rendered = repr(starts[0]["payload"])
+    assert "super-secret-operation-key" not in rendered
+    assert "secret-command-value" not in rendered
+    assert "super-secret-env-value" not in rendered
