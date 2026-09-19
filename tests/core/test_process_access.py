@@ -96,6 +96,23 @@ def test_process_run_blocks_workspace_escape(tmp_path: Path) -> None:
         )
 
 
+def test_process_run_blocks_symlink_escape(tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}_outside"
+    outside.mkdir(exist_ok=True)
+    link = tmp_path / "outside_link"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not supported/allowed on this platform")
+
+    with pytest.raises(ProcessAccessError):
+        _process(tmp_path).run(
+            [sys.executable, "-c", "print('never')"],
+            cwd="outside_link",
+            timeout_s=1.0,
+        )
+
+
 def test_process_run_truncates_output_at_capability_limit(tmp_path: Path) -> None:
     result = _process(tmp_path, max_output_chars=10).run(
         [sys.executable, "-c", "print('x' * 30, end='')"],
