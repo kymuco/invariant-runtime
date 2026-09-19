@@ -10,6 +10,7 @@ from invariant.spec.capabilities import (
     HTTP_CAPABILITY,
     INSPECTOR_CAPABILITY,
     KEY_VALUE_CAPABILITY,
+    PROCESS_CAPABILITY,
     WORKSPACE_CAPABILITY,
 )
 
@@ -39,6 +40,7 @@ CAP_FS_SANDBOX: Final[str] = FS_SANDBOX_CAPABILITY.id
 CAP_WORKSPACE: Final[str] = WORKSPACE_CAPABILITY.id
 CAP_HTTP: Final[str] = HTTP_CAPABILITY.id
 CAP_KV: Final[str] = KEY_VALUE_CAPABILITY.id
+CAP_PROCESS: Final[str] = PROCESS_CAPABILITY.id
 CAP_CONFIG_SOURCE: Final[str] = CONFIG_SOURCE_CAPABILITY.id
 
 # Internal-only runtime capabilities are intentionally not part of the public
