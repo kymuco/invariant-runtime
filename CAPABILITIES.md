@@ -37,7 +37,7 @@ The built-in plugin-facing references are:
 | `WORKSPACE_CAPABILITY` | `invariant:capability.workspace@0.3.0` |
 | `HTTP_CAPABILITY` | `invariant:capability.http@0.1.0` |
 | `KEY_VALUE_CAPABILITY` | `invariant:capability.kv@0.1.0` |
-| `PROCESS_CAPABILITY` | `invariant:capability.process@0.1.0` |
+| `PROCESS_CAPABILITY` | `invariant:capability.process@0.2.0` |
 | `CONFIG_SOURCE_CAPABILITY` | `invariant:capability.config_source@0.1.0` |
 | `INSPECTOR_CAPABILITY` | `invariant:capability.inspector@0.1.0` |
 
@@ -137,20 +137,24 @@ Simple JSON-backed key-value storage over an execution/workspace filesystem capa
 
 The capability is only available when policy permits the storage path it requires.
 
-### invariant:capability.process @ 0.1.0
+### invariant:capability.process @ 0.2.0
 
-Workspace-bound synchronous process execution.
+Workspace-bound synchronous and durable background process execution.
 
 Properties:
 
-- available only when the execution has a workspace and host policy enables process access
+- `run(...)` preserves the bounded synchronous process contract
+- `start(key, ...)` creates an idempotent durable background process keyed by opaque technical identity
+- `status(handle)`, `terminate(handle)`, and `read_output(handle)` operate on the returned opaque handle
+- replay with the same key and request reuses the existing durable process rather than starting a second child
+- reuse of the same key for a different request is rejected
 - relative cwd is resolved and confined inside the hidden workspace root
-- timeout is capped by host policy
-- stdout/stderr are bounded by host policy
-- command arguments and environment values are not part of the capability audit payload
+- synchronous timeout and all exposed stdout/stderr are bounded by host policy
+- command arguments, process keys, and environment values are not part of the capability audit payload
 - the capability does not expose the workspace root or resolver to plugin code
+- uncertain in-flight state is reported as `unknown`; the capability never auto-restarts it
 
-A capability grant is still not human authorization. Product-level admission remains upstream of Invariant.
+The process key is an idempotency/reconciliation primitive, not permission or retry authority. Product-level admission remains upstream of Invariant.
 
 ### invariant:capability.config_source @ 0.1.0
 
@@ -175,7 +179,7 @@ Runtime emits structured events for capability operations on a best-effort, non-
 - `cap.fs.read_bytes`, `cap.fs.write_bytes`, `cap.fs.mkdir`
 - `cap.fs.list_dir`, `cap.fs.delete_file`, `cap.fs.delete_tree`
 - `cap.http.get_*`, `cap.http.post_json`
-- `cap.process.run`
+- `cap.process.run`, `cap.process.start`, `cap.process.status`, `cap.process.terminate`
 - `cap.kv.get`, `cap.kv.set`, `cap.kv.delete`, `cap.kv.list_keys`
 
 Events contain the capability ID and operation metadata. Sensitive values should not be treated as part of the audit contract.
