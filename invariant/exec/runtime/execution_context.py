@@ -67,6 +67,7 @@ class ExecutionContext:
             CAP_HTTP,
             CAP_INSPECTOR,
             CAP_KV,
+            CAP_PROCESS,
             CAP_WORKSPACE,
         )
 
@@ -129,16 +130,26 @@ class ExecutionContext:
             eff_r = min(int(opts.max_read_bytes), pol_r)
             eff_w = min(int(opts.max_write_bytes), pol_w)
 
-            self._capabilities_base.register(
-                CAP_WORKSPACE,
-                FSAccess(
-                    root=workspace_root,
-                    write=eff_write,
-                    delete=eff_delete,
-                    read_limit=eff_r,
-                    write_limit=eff_w,
-                ),
+            workspace_fs = FSAccess(
+                root=workspace_root,
+                write=eff_write,
+                delete=eff_delete,
+                read_limit=eff_r,
+                write_limit=eff_w,
             )
+            self._capabilities_base.register(CAP_WORKSPACE, workspace_fs)
+
+            if bool(getattr(limits, "allow_process", False)):
+                from invariant.exec.caps.process import ProcessAccess
+
+                self._capabilities_base.register(
+                    CAP_PROCESS,
+                    ProcessAccess(
+                        workspace=workspace_fs,
+                        max_timeout_s=float(getattr(limits, "process_max_timeout_s", 120.0)),
+                        max_output_chars=int(getattr(limits, "process_max_output_chars", 40_000)),
+                    ),
+                )
 
         # ---- optional: KV (store state for pipelines) ----
         try:
