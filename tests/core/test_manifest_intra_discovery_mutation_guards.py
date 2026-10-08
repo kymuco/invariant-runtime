@@ -61,6 +61,7 @@ def test_manifest_containment_rechecks_canonical_paths_within_one_load(
         if retarget == "source_path"
         else resolved_outside
     )
+    source = ManifestSource([root])
     calls = 0
 
     def simulated_retarget(path: Path, *args, **kwargs) -> Path:
@@ -77,7 +78,7 @@ def test_manifest_containment_rechecks_canonical_paths_within_one_load(
     # canonical paths, then resolves each again to validate containment.
     # A candidate that removes either second resolution fails this test.
     with pytest.raises(PluginLoadError, match="must be under plugin_root"):
-        ManifestSource([root])._read_manifest(manifest, dev_mode=False)
+        source._read_manifest(manifest, dev_mode=False)
 
     assert calls == 2
 
