@@ -96,3 +96,65 @@ or if measured savings are too small to matter against total ~50 ms
 SDK bootstrap. An unobserved symlink OS behavior is not positive proof.
 
 There is no runtime optimization and no speedup claim in this PR.
+
+
+## Measured Windows decision — 2026-10-08: NO_GO
+
+The user executed the initial PR #21 research harness on the independently
+installed Runplane R130 wheel and supplied the full JSON proof:
+
+```text
+Runplane .dist-check/manifest-enumeration-01/measurements/manifest-enumeration-proof.json
+```
+
+Environment: Windows 10.0.26300, Python 3.11.9. 40 alternating pairs.
+Result: `pass=true`, `candidate_eligible=true` *for the installed
+67-manifest tree only*, and an unchanged before/after inventory
+(67 plugins, 29 canonical effects, SHA256
+`312409d73f8e1cd4a7b2e6d21f9d8864895bdadf08571d3d89389a8a5e403ff8`).
+
+| Measurement | rglob | os.walk |
+| --- | ---: | ---: |
+| Median, milliseconds | 5.4611 | 5.4276 |
+| Mean, milliseconds | 5.5537 | 5.4914 |
+| p95, milliseconds | 6.0759 | 5.8860 |
+| Samples | 40 | 40 |
+
+The median difference is **0.0335 ms** (~0.61% of rglob enumeration
+time). This difference is too small, relative to observed spread and
+~50 ms total SDK bootstrap, to justify replacing production discovery.
+It is **not** a measured SDK-level speedup.
+
+The initial Windows case-parity test **failed**: a
+`MANIFEST.JSON` fixture exposed different matching behavior.
+The candidate's `os.path.normcase` comparison admits that filename,
+whereas the observed current `Path.rglob("manifest.json")` pattern
+does not. This is a distinct semantic mismatch, despite exact parity
+on all 67 manifests in the standard installed pack.
+
+The original focused gates:
+
+- Ruff lint: PASS;
+- Ruff format: two files required formatting (style only);
+- Enumeration tests: **12 passed, 1 failed** (Windows case mismatch);
+- Merged path-security baseline: **14 passed, 3 skipped** (file
+  symlink creation denied by WinError 1314);
+- Intra-discovery mutation guards: **3 passed**;
+- Independent 40-pair enumeration pilot: **PASS**, with the narrow
+  `candidate_eligible=true` reported above.
+
+The branch repairs the formatter issues and **changes the Windows
+case test to require the observed mismatch**, not to hide or normalize
+it away. It also improves `first_differences` to include files present
+on only one side of the comparison (the earlier `zip` stopped at the
+shorter list).
+
+**Decision: NO_GO for replacing `Path.rglob` with this `os.walk`
+candidate.** Keep the existing loader unchanged. Merging the research
+script, parity tests, and documentation, if their final gate is green,
+records negative evidence; it does not approve an implementation PR.
+
+Further filesystem optimization would need a distinct high-ROI
+hypothesis, full security equivalence and explicit owner justification.
+No changes to `ManifestSource.discover`, `_read_manifest`, or
+`_ensure_under_root` are proposed here.
