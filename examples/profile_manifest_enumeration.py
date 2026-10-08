@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
-from itertools import zip_longest
 import json
 import math
 import os
@@ -17,6 +16,7 @@ import platform
 import statistics
 import sys
 import time
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any
 
