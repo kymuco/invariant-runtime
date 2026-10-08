@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+from itertools import zip_longest
 import json
 import math
 import os
@@ -73,7 +74,7 @@ def _compare(roots: list[Path]) -> dict[str, Any]:
         "first_differences": [
             {"position": i, "baseline": lhs, "candidate": rhs}
             for i, (lhs, rhs) in enumerate(
-                zip(baseline, candidate, strict=False)
+                zip_longest(baseline, candidate, fillvalue=None)
             )
             if lhs != rhs
         ][:10],
@@ -122,10 +123,7 @@ def _manifest_roots(package_file: Path) -> list[Path]:
 
 def _inventory(runplane) -> dict[str, Any]:
     with runplane.Runplane.create() as sdk:
-        plugins = [
-            (item.id, item.version)
-            for item in sdk.service.list_plugins()
-        ]
+        plugins = [(item.id, item.version) for item in sdk.service.list_plugins()]
         effects = [effect["id"] for effect in sdk.list_effects()]
     encoded = json.dumps(
         {"plugins": plugins, "effects": effects}, sort_keys=True
@@ -170,9 +168,7 @@ def run(proof_root: Path, samples: int) -> dict[str, Any]:
                 "baseline_paths" if name == "rglob" else "candidate_paths"
             ]
             if [str(path) for path in observed] != expected:
-                raise RuntimeError(
-                    f"{name} changed during measurement; cannot compare"
-                )
+                raise RuntimeError(f"{name} changed during measurement; cannot compare")
 
     after = _inventory(runplane)
     if before != after:
