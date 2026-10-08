@@ -185,15 +185,20 @@ def test_enumeration_candidate_records_windows_case_parity(
     manifest = _manifest(root, name="MANIFEST.JSON")
     parity = pilot["_compare"]([root])
 
-    # On the observed Windows/Python 3.11 host, the current rglob pattern
-    # does not discover uppercase MANIFEST.JSON, whereas normcase-based
-    # os.walk matching does. This is a proven candidate parity failure.
+    # On the measured Windows/Python 3.11 host, rglob discovers this file
+    # but constructs a path using the lowercase search pattern. os.walk
+    # retains the actual uppercase directory-entry name. These strings
+    # differ even though both refer to the same file on this filesystem.
+    baseline = str(root / "manifest.json")
+    assert Path(baseline).samefile(manifest)
+    assert parity["baseline_count"] == 1
+    assert parity["candidate_count"] == 1
     assert parity["eligible"] is False
     assert parity["same_multiset"] is False
-    assert parity["baseline_paths"] == []
+    assert parity["baseline_paths"] == [baseline]
     assert parity["candidate_paths"] == [str(manifest)]
     assert parity["first_differences"] == [
-        {"position": 0, "baseline": None, "candidate": str(manifest)}
+        {"position": 0, "baseline": baseline, "candidate": str(manifest)}
     ]
 
 
