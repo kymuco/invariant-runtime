@@ -6,6 +6,7 @@ nor weakens plugin-root containment checks.
 
 from __future__ import annotations
 
+import errno
 import json
 import subprocess
 import sys
@@ -64,8 +65,17 @@ def _read(manifest: Path):
 def _symlink(link: Path, target: Path, *, is_directory: bool = False) -> None:
     try:
         link.symlink_to(target, target_is_directory=is_directory)
-    except (OSError, NotImplementedError) as exc:
-        pytest.skip(f"Symlinks unavailable on this host: {exc}")
+    except NotImplementedError as exc:
+        pytest.skip(f"Symlinks unsupported by this Python host: {exc}")
+    except OSError as exc:
+        permissions = {errno.EACCES, errno.EPERM, errno.ENOTSUP}
+        if exc.errno in permissions or getattr(exc, "winerror", None) in {
+            5,
+            50,
+            1314,
+        }:
+            pytest.skip(f"OS policy forbids symlink creation: {exc}")
+        raise
 
 
 def test_manifest_path_contract_accepts_nested_code_and_preserves_descriptor(
