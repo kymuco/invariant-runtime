@@ -57,9 +57,7 @@ def _code(target: Path) -> Path:
 
 
 def _read(manifest: Path):
-    return ManifestSource([manifest.parent])._read_manifest(
-        manifest, dev_mode=False
-    )
+    return ManifestSource([manifest.parent])._read_manifest(manifest, dev_mode=False)
 
 
 def _symlink(link: Path, target: Path, *, is_directory: bool = False) -> None:
@@ -162,6 +160,20 @@ def test_manifest_path_contract_revalidates_symlink_after_retarget(
         _read(manifest)
 
 
+def _junction(link: Path, target: Path) -> None:
+    """Create an NTFS directory junction without symlink privileges."""
+    created = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+        cwd=link.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    if created.returncode != 0:
+        pytest.skip("Windows junction creation unavailable in this environment")
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="NTFS junction-specific")
 def test_manifest_path_contract_rejects_external_windows_junction(
     tmp_path: Path,
@@ -171,19 +183,61 @@ def test_manifest_path_contract_rejects_external_windows_junction(
     root = tmp_path / "plugin"
     manifest = _plugin(root, code_rel="linked/plugin.py")
     junction = root / "linked"
-    created = subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(junction), str(external_dir)],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
-    if created.returncode != 0:
-        pytest.skip("Windows junction creation unavailable in this environment")
+    _junction(junction, external_dir)
 
-    with pytest.raises(PluginLoadError, match="must be under plugin_root"):
-        _read(manifest)
+    try:
+        with pytest.raises(PluginLoadError, match="must be under plugin_root"):
+            _read(manifest)
+    finally:
+        junction.rmdir()
+    assert (external_dir / "plugin.py").is_file()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="NTFS junction-specific")
+def test_manifest_path_contract_allows_internal_windows_junction(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "plugin"
+    manifest = _plugin(root, code_rel="linked/plugin.py")
+    internal = _code(root / "src" / "plugin.py")
+    junction = root / "linked"
+    _junction(junction, internal.parent)
+
+    try:
+        descriptor = _read(manifest)
+        assert descriptor.source.path == internal.resolve()
+    finally:
+        junction.rmdir()
+    assert internal.is_file()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="NTFS junction-specific")
+def test_manifest_path_contract_revalidates_junction_between_loads(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "plugin"
+    manifest = _plugin(root, code_rel="linked/plugin.py")
+    internal = _code(root / "src" / "plugin.py")
+    external = _code(tmp_path / "outside" / "plugin.py")
+    junction = root / "linked"
+    _junction(junction, internal.parent)
+
+    try:
+        first = _read(manifest)
+        assert first.source.path == internal.resolve()
+
+        # Remove only the junction entry, not the target directory.
+        junction.rmdir()
+        assert internal.is_file()
+        _junction(junction, external.parent)
+
+        with pytest.raises(PluginLoadError, match="must be under plugin_root"):
+            _read(manifest)
+    finally:
+        if junction.exists():
+            junction.rmdir()
+    assert external.is_file()
+    assert internal.is_file()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows casing semantics")
@@ -268,11 +322,15 @@ def test_manifest_service_inventory_order_is_stable_across_search_order(
         finally:
             service.close()
 
-    assert snapshots[0] == snapshots[1] == [
-        ("example:alpha", "1.2.0"),
-        ("example:alpha", "1.10.0"),
-        ("example:beta", "2.0.0"),
-    ]
+    assert (
+        snapshots[0]
+        == snapshots[1]
+        == [
+            ("example:alpha", "1.2.0"),
+            ("example:alpha", "1.10.0"),
+            ("example:beta", "2.0.0"),
+        ]
+    )
 
 
 def test_manifest_path_contract_no_cross_create_cache(
