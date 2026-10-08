@@ -34,6 +34,8 @@ correctness and security regression cases before selecting a change.
 | Symlink within same root | Accepted with canonical target path | `allows_symlink_into_same_plugin_root` |
 | Symlink retargeted *between* loads | Subsequent load rechecks and rejects external target | `revalidates_symlink_after_retarget` |
 | NTFS directory junction escape | Rejected on Windows | `rejects_external_windows_junction` |
+| NTFS junction targeting the same root | Accepted on Windows | `allows_internal_windows_junction` |
+| NTFS junction retargeted between loads | Next load rejects the outside target | `revalidates_junction_between_loads` |
 | Windows case-insensitive filesystem | Resolves existing filename regardless of case | `windows_case_insensitive_code_resolution` |
 | Missing source file | Rejected | `rejects_missing_code` |
 | Oversized manifest | Rejected at 1,000,001 bytes | `rejects_oversized_manifest` |
@@ -46,6 +48,26 @@ Some OS-level features are conditional: creation of symlinks may be
 disallowed without Windows Developer Mode or privileges; junction creation
 may be disallowed by host policy. Such tests **skip** when facilities are
 unavailable. A skipped test does *not* count as security evidence.
+Windows NTFS directory junctions exercise a useful subset of path-escape
+and retargeting behavior without symlink privileges; they are **not**
+equivalent to file symlinks or a proof against concurrent retargeting.
+
+## First local Windows baseline (2026-10-08)
+
+On the original candidate HEAD `8b433dde7c5e091fe75bd05a6e59d7f1868d3bcf`:
+
+- Ruff check: PASS.
+- Ruff format --check: two style-only differences.
+- Focused path-security suite: **12 passed, 3 skipped**.
+- Existing public inventory suite: **4 passed**.
+- The three skipped cases were file symlink creation failures with
+  Windows `WinError 1314` (missing symbolic-link privilege).
+- The original NTFS junction escape check did **not** skip.
+
+The subsequent branch revision fixes the formatter findings and adds
+Windows junction-into-root and junction-retarget-between-loads tests to
+improve non-elevated coverage. Those **new tests are not yet validated**.
+The three file symlink gaps remain real and must be recorded separately.
 
 ## Important limits of this suite
 
