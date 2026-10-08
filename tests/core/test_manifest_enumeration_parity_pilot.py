@@ -142,8 +142,7 @@ def test_enumeration_candidate_records_windows_junction_parity(
             parity["baseline_paths"] == parity["candidate_paths"]
         )
         assert parity["same_multiset"] == (
-            sorted(parity["baseline_paths"])
-            == sorted(parity["candidate_paths"])
+            sorted(parity["baseline_paths"]) == sorted(parity["candidate_paths"])
         )
     finally:
         link.rmdir()
@@ -156,11 +155,19 @@ def test_enumeration_candidate_records_windows_case_parity(
 ) -> None:
     pilot = _pilot()
     root = tmp_path / "pack"
-    _manifest(root, name="MANIFEST.JSON")
+    manifest = _manifest(root, name="MANIFEST.JSON")
     parity = pilot["_compare"]([root])
 
-    assert parity["eligible"] is True
-    assert parity["baseline_count"] == 1
+    # On the observed Windows/Python 3.11 host, the current rglob pattern
+    # does not discover uppercase MANIFEST.JSON, whereas normcase-based
+    # os.walk matching does. This is a proven candidate parity failure.
+    assert parity["eligible"] is False
+    assert parity["same_multiset"] is False
+    assert parity["baseline_paths"] == []
+    assert parity["candidate_paths"] == [str(manifest)]
+    assert parity["first_differences"] == [
+        {"position": 0, "baseline": None, "candidate": str(manifest)}
+    ]
 
 
 @pytest.mark.parametrize("count", [0, 4, 121])
