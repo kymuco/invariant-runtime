@@ -116,6 +116,33 @@ def test_enumeration_comparison_rejects_order_changes_without_mutating_tree(
     assert len(baseline) == 2
 
 
+def test_enumeration_comparison_reports_unpaired_candidate_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pilot = _pilot()
+    root = tmp_path / "pack"
+    _manifest(root / "a")
+    extra = root / "extra" / "MANIFEST.JSON"
+    _manifest(extra.parent, name=extra.name)
+
+    monkeypatch.setitem(
+        pilot["_compare"].__globals__,
+        "_candidate",
+        lambda paths: [*pilot["_baseline"](paths), extra],
+    )
+    parity = pilot["_compare"]([root])
+
+    assert parity["eligible"] is False
+    assert parity["same_multiset"] is False
+    assert parity["candidate_count"] == parity["baseline_count"] + 1
+    assert parity["first_differences"][-1] == {
+        "position": parity["baseline_count"],
+        "baseline": None,
+        "candidate": str(extra),
+    }
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="NTFS junction-specific")
 def test_enumeration_candidate_records_windows_junction_parity(
     tmp_path: Path,
