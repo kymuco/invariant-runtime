@@ -106,7 +106,7 @@ def _installed_runplane():
     return runplane, imported
 
 
-def _manifest_roots(runplane, package_file: Path) -> list[Path]:
+def _manifest_roots(package_file: Path) -> list[Path]:
     bootstrap = importlib.import_module("runplane.bootstrap")
     stack = bootstrap.runtime_stack()
     packs = package_file.parents[1] / "plugin_packs"
@@ -146,7 +146,7 @@ def run(proof_root: Path, samples: int) -> dict[str, Any]:
         raise ValueError("Proof root must be new and not overwrite any files")
 
     runplane, imported = _installed_runplane()
-    roots = _manifest_roots(runplane, imported)
+    roots = _manifest_roots(imported)
     before = _inventory(runplane)
     parity = _compare(roots)
 
