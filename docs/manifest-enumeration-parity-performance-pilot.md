@@ -125,12 +125,17 @@ time). This difference is too small, relative to observed spread and
 ~50 ms total SDK bootstrap, to justify replacing production discovery.
 It is **not** a measured SDK-level speedup.
 
-The initial Windows case-parity test **failed**: a
-`MANIFEST.JSON` fixture exposed different matching behavior.
-The candidate's `os.path.normcase` comparison admits that filename,
-whereas the observed current `Path.rglob("manifest.json")` pattern
-does not. This is a distinct semantic mismatch, despite exact parity
-on all 67 manifests in the standard installed pack.
+The Windows case-parity test exposed a **path spelling difference**,
+not a difference in discovered file membership. On Windows/Python 3.11,
+`Path.rglob("manifest.json")` finds `MANIFEST.JSON`, but produces a
+path spelling ending with `manifest.json` (the lowercase pattern).
+The `os.walk` candidate emits the actual directory-entry spelling
+`MANIFEST.JSON`. Both paths refer to the same underlying file on the
+tested case-insensitive filesystem. Exact path-string sequence parity
+still fails, and downstream consumers can observe the spelling difference.
+This does **not** demonstrate that the baseline omits an uppercase file.
+The original assertion that baseline discovery returned no files was
+incorrect; the later test fixes that expectation.
 
 The original focused gates:
 
@@ -143,11 +148,13 @@ The original focused gates:
 - Independent 40-pair enumeration pilot: **PASS**, with the narrow
   `candidate_eligible=true` reported above.
 
-The branch repairs the formatter issues and **changes the Windows
-case test to require the observed mismatch**, not to hide or normalize
-it away. It also improves `first_differences` to include files present
-on only one side of the comparison (the earlier `zip` stopped at the
-shorter list).
+The branch repairs the formatter issues and makes the Windows
+case test assert that **both enumerators discover one file**, but the
+returned path strings differ in case. The test checks
+`Path.samefile()` on the lowercased baseline spelling to separate file
+identity from representation. It also improves `first_differences` to
+include paths present on only one side of a sequence comparison
+(the earlier `zip` stopped at the shorter list).
 
 **Decision: NO_GO for replacing `Path.rglob` with this `os.walk`
 candidate.** Keep the existing loader unchanged. Merging the research
@@ -158,3 +165,25 @@ Further filesystem optimization would need a distinct high-ROI
 hypothesis, full security equivalence and explicit owner justification.
 No changes to `ManifestSource.discover`, `_read_manifest`, or
 `_ensure_under_root` are proposed here.
+
+### Final-gate correction after initial NO_GO documentation
+
+The user's subsequent run on
+`231b985ebfcd02956441a6275c9f5e19e1991de6` showed:
+
+- Ruff formatter: **PASS** (2 files formatted);
+- Ruff check: **one I001** (import order);
+- Focused tests: **13 passed, 1 failed**, solely the Windows case test;
+- Failure evidence: baseline included one
+  `...\\pack\\manifest.json` path, not an empty list.
+
+The newest changes reorder the one import and correct the test and
+documentation to match the observed **file-found/path-spelling-differs**
+behavior. These changes do not modify the performance harness's
+enumeration algorithms or any production source. The new exact HEAD
+still requires a short Ruff and focused-test gate.
+
+The **NO_GO** decision remains unchanged: negligible median difference
+of 0.0335 ms for the installed 67-manifest tree, and no proof of general
+path-string behavior parity. Do not turn this into an `os.walk`
+production optimization.
