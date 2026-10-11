@@ -173,6 +173,58 @@ The 37-test local suite is run with the same stdlib command above. The
 previous 2,500-repeat claim only applies to the original 25 tests; the 12 new
 process tests have **not** been repeated 100 times.
 
+## Worker supervision & reconciliation experiment
+
+`supervision.py` and `test_supervision.py` add a **separate**, still
+research-only observation layer on top of the existing `worker_supervisor.py`
+process fixture. They do not modify `StopFirstSlot` or the production runtime.
+
+A worker is tracked through two distinct facts: **desired state**
+(`running` / `stopped`) and **observed process state** (`poll()`, PID,
+exit code, and resource ownership). A small background thread invokes
+`reconcile_once()` at a bounded polling interval; callers may also invoke
+that method explicitly for deterministic diagnosis.
+
+```text
+RUNNING -> [unexpected process exit] -> BACKOFF -> STARTING -> RUNNING
+                                       \-> RESOURCE_WAIT -> [resource free]
+                                       \-> EXHAUSTED / FAULTED
+[host disable] -> STOPPING -> STOPPED  (no spontaneous restart)
+```
+
+**Recovery policy:** a version-pinned worker is restarted only when the host
+still wants it running and the exclusive port is free. Retries use bounded
+exponential backoff and a **cumulative per-enable-session restart budget**.
+Exhaustion requires explicit host intervention (`disable()` then `enable()`);
+it never resets itself after a successful short-lived restart. The original
+failed RPC is **not replayed**.
+
+**Failure containment:** if an unknown launcher error makes process ownership
+uncertain, the supervisor goes to `FAULTED` instead of guessing whether it
+can safely launch another child. If another process owns the exclusive port,
+the supervisor waits in `RESOURCE_WAIT` without consuming restart attempts.
+Intentional `disable()` cancels pending restarts and reaps the child.
+
+**Results:** the 13 new tests passed in multiple local Python **3.13.5 /
+Linux** runs. They exercise actual Python child processes and an OS-bound TCP
+port, unexpected exit detection, automatic restart, crash-loop exhaustion,
+manual budget reset, concurrent reconciliation, occupied-resource deferral,
+artifact mutation detection, explicit shutdown, and no RPC replay. Prior pilots
+contributed 37 tests, so the branch now contains **50 test methods** across
+the four pilots; **the complete combined 50-test suite was not rerun** in
+this step. The new files were also parsed using Python 3.11 grammar, but
+not executed with a Python 3.11 interpreter. No GitHub CI was requested.
+
+**Critical limitations:** this is *not yet* a production supervisor. It
+observes process exit, **not a live-but-unresponsive worker**. It lacks
+heartbeat/deadline supervision, descendant process containment, cross-process
+resource arbitration, durable desired-state recovery after host crashes,
+real VRAM inspection, state migration, a generic dependency graph, multi-worker
+routing, and integration with `PluginService`/`StopFirstSlot`. It supervises
+**one pinned worker and one simulated exclusive resource**, and holds a
+control lock while making bounded synchronous worker calls. The host process
+continues running, but the provider can be unavailable while it recovers.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
