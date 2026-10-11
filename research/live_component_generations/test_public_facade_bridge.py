@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from invariant.api import DependencyCycleError, PluginLoadError, PluginNotFoundError
 from prototype import ProviderSlot
 from public_facade_bridge import CatalogGeneration, register_generation
 
@@ -135,7 +136,7 @@ class PublicFacadeBridgeTests(unittest.TestCase):
         self.stage("v1", version="1.0.0")
         self.slot.switch("research:tts", "1.0.0")
         self.stage("v2", version="2.0.0", requires="research:lexicon@9.0.0")
-        with self.assertRaises(Exception):
+        with self.assertRaises(PluginNotFoundError):
             self.slot.switch("research:tts", "2.0.0")
         self.assertEqual(self.slot.active(), ("research:tts", "1.0.0"))
         with self.slot.acquire() as old:
@@ -147,7 +148,7 @@ class PublicFacadeBridgeTests(unittest.TestCase):
         self.stage("v1", version="1.0.0")
         self.slot.switch("research:tts", "1.0.0")
         self.stage("v2", version="2.0.0", cycle=True)
-        with self.assertRaises(Exception):
+        with self.assertRaises(DependencyCycleError):
             self.slot.switch("research:tts", "2.0.0")
         self.assertEqual(self.slot.active(), ("research:tts", "1.0.0"))
         self.assertEqual(self.slot.shutdown_errors(), ())
@@ -156,7 +157,7 @@ class PublicFacadeBridgeTests(unittest.TestCase):
         self.stage("v1", version="1.0.0")
         self.slot.switch("research:tts", "1.0.0")
         self.stage("bad", version="2.0.0", bad_manifest=True)
-        with self.assertRaises(Exception):
+        with self.assertRaises(PluginLoadError):
             self.slot.switch("research:tts", "2.0.0")
         self.assertEqual(self.slot.active(), ("research:tts", "1.0.0"))
 
@@ -172,7 +173,7 @@ class PublicFacadeBridgeTests(unittest.TestCase):
         self.stage("v1", version="1.0.0")
         self.slot.switch("research:tts", "1.0.0")
         self.stage("bad", version="2.0.0", fail_initialize=True)
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(RuntimeError, "candidate initialization failed"):
             self.slot.switch("research:tts", "2.0.0")
         with self.slot.acquire() as old:
             self.assertFalse(old.closed)
