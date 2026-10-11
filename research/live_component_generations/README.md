@@ -260,9 +260,11 @@ during a hang, crash recovery without request replay, resource contention,
 restart-budget exhaustion, pinned artifact mutation, and forced stop failure.
 Source and tests parse under Python 3.11 grammar but were not run on a 3.11
 interpreter. Research test coverage now comprises **62 test methods across
-five experiments**. A full combined local run was attempted but exceeded
-the overall command timeout; **the 62-test combined suite is NOT verified
-green**. GitHub CI was not run.
+five experiments**. All 62 tests passed in their **four separate groups**:
+25 binding/stop-first, 12 worker-process, 13 exit-supervision, and 12
+health-monitoring checks. A full combined local run was attempted but exceeded
+the overall command timeout; **the single-command 62-test combined suite is
+NOT verified green**. GitHub CI was not run.
 
 **Limitations:** heartbeats are not proof of application-level progress or
 model correctness. No real TTS/LLM, VRAM measurements, cross-process lock
