@@ -109,6 +109,12 @@ consumer exceptions, concurrent replacement, failed stop, failed restore,
 and candidate startup that leaks exclusive ownership. Together with the
 first pilot this is **25 stdlib unittest cases**.
 
+Local repetition check: the complete 25-test suite also passed **100 times
+consecutively in one Python 3.13.5 process (2,500 individual executions)**.
+The first attempt to repeat via many new shell-launched processes exceeded
+the command's overall timeout; it did not identify a failing individual test.
+No multi-process/GPU stress claim is made.
+
 **Critical non-guarantees:** no real GPU measurements, OS process/worker
 termination proof, preemption of stuck blocking `start()`/`stop()`, cross-process
 resource arbitration, or trusted external health checks. The synchronous
