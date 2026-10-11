@@ -185,6 +185,25 @@ class HealthTests(unittest.TestCase):
         self.assertIn("pinned artifact mutated", s.snapshot().last_error or "")
         self.assertTrue(port_is_free(self.port))
 
+    def test_failed_process_stop_retains_owned_worker_handle(self):
+        from unittest.mock import patch
+
+        s = self.make()
+        s.enable()
+        worker = s._worker  # Research-only fault injection; not public API.
+        self.assertIsNotNone(worker)
+        assert worker is not None
+        self.assertEqual(s.call("silence")["value"], "silenced")
+        time.sleep(s.policy.heartbeat_timeout_s + 0.04)
+        with patch.object(worker, "stop", side_effect=RuntimeError("stop failed")):
+            s.tick()
+        self.assertEqual(s.snapshot().phase, Phase.FAULTED)
+        self.assertEqual(s.snapshot().pid, worker.proc.pid)
+        self.assertTrue(s.snapshot().process_alive)
+        self.assertFalse(port_is_free(self.port))
+        s.disable()  # Recovered stop callback frees the actual process.
+        self.assertTrue(port_is_free(self.port))
+
     def test_policy_validation(self):
         for options in ({"max_restarts": -1}, {"max_restarts": True},
                         {"heartbeat_interval_s": 0}, {"heartbeat_timeout_s": 0.01},
