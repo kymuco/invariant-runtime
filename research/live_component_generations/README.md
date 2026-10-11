@@ -1,5 +1,7 @@
 # Live component generations — research pilot v0
 
+**Architectural disposition:** see [ARCHITECTURE_AUDIT_v1.md](ARCHITECTURE_AUDIT_v1.md) for the seven-pilot audit, minimal core contract, proven limitations, and explicit no-merge gates.
+
 **Research only. Not a production feature, public API, or proposed Manifest v1
 extension.** Keep this directory outside the shipped `invariant` package.
 Do not merge into `main` until the invariants and integration strategy are
