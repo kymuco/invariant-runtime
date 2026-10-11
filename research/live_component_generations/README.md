@@ -225,6 +225,55 @@ routing, and integration with `PluginService`/`StopFirstSlot`. It supervises
 control lock while making bounded synchronous worker calls. The host process
 continues running, but the provider can be unavailable while it recovers.
 
+## Health monitoring: living but unresponsive workers
+
+The fifth independent research experiment adds `health_fixture.py`,
+`health_probe.py`, and `test_health_probe.py`. This is **not** wired into
+`PluginService`, `StopFirstSlot`, the earlier `WorkerSupervisor`, or the
+production isolated-worker machinery.
+
+The child emits **heartbeats from a separate Python thread** while its request
+loop processes RPCs. Frames share the *same stdout pipe* and are demultiplexed
+by type: they are logically independent signals, **not** an independent OS
+control channel. The host monitors both:
+
+- **Process heartbeat deadline:** a live process that ceases to emit
+  heartbeats becomes unhealthy. The readiness handshake resets the first
+  heartbeat deadline, preventing false timeout due solely to slow Python
+  interpreter startup.
+- **Per-operation deadline:** a request can hang even while heartbeats
+  continue. A missing RPC reply is treated as **outcome unknown**, never
+  automatically replayed. Slow but on-time operations do not trigger
+  restart simply because they outlast a heartbeat interval.
+
+The research coordinator denies new calls during recovery, attempts bounded
+child termination and reaping, verifies simulated exclusive-resource release
+with a localhost TCP bind probe, applies backoff and a cumulative restart
+budget, and supports explicit disable without spontaneous resurrection. If
+child termination is unproven, it keeps the worker handle for diagnosis and
+marks the slot `FAULTED`; it does **not** allocate a replacement.
+
+**Observed local result:** the **12 new tests passed twice** on **Python
+3.13.5 / Linux**, including heartbeat silence with a live process, an RPC
+hang with continuing heartbeats, legitimate slow RPCs, explicit shutdown
+during a hang, crash recovery without request replay, resource contention,
+restart-budget exhaustion, pinned artifact mutation, and forced stop failure.
+Source and tests parse under Python 3.11 grammar but were not run on a 3.11
+interpreter. Research test coverage now comprises **62 test methods across
+five experiments**. A full combined local run was attempted but exceeded
+the overall command timeout; **the 62-test combined suite is NOT verified
+green**. GitHub CI was not run.
+
+**Limitations:** heartbeats are not proof of application-level progress or
+model correctness. No real TTS/LLM, VRAM measurements, cross-process lock
+guarantees, descendant-process control, independent OS heartbeat transport,
+nonblocking IPC writes, durable restart decisions, GPU driver failure
+detection, or production API integration is demonstrated. Strict end-to-end
+deadlines and cancellation semantics for live streaming are separate design
+problems; host continuity does not imply that an interrupted TTS phrase
+continues seamlessly. The TCP-port probe is a **research stand-in**, and the
+small timeouts are test parameters, not production recommendations.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
