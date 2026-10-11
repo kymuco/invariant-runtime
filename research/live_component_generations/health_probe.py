@@ -274,13 +274,14 @@ class HealthSupervisor:
                     worker.poisoned = reason
                 self._error = reason
                 self._events.append(reason)
-                self._worker = None
                 try:
                     worker.stop(self.policy.stop_timeout_s)
                 except Exception as exc:
+                    # Preserve the handle when process termination is unproven.
                     self._error = f"stop_unproven: {exc!r}"
                     self._set(Phase.FAULTED, "stop_unproven")
                     return self.snapshot()
+                self._worker = None
                 if not port_is_free(self.port):
                     self._set(Phase.FAULTED, "resource_not_released")
                     return self.snapshot()
