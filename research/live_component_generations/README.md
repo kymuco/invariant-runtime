@@ -276,6 +276,65 @@ problems; host continuity does not imply that an interrupted TTS phrase
 continues seamlessly. The TCP-port probe is a **research stand-in**, and the
 small timeouts are test parameters, not production recommendations.
 
+## Public-facade integration experiment (candidate; execution pending)
+
+`public_facade_bridge.py` and `test_public_facade_bridge.py` are an
+independent **sixth hypothesis test**. Unlike the first five simulated
+catalog/binding experiments, this integration adapter imports the existing
+production **public** `invariant.api.PluginService` and `EphemeralPolicy`,
+then calls `PluginService.from_manifest_paths()`, `list_plugins()`,
+`execution()`, and `ExecutionContext.get()`. No private registry or loader
+APIs, new manifest fields, or runtime/core modifications are required.
+
+The proposed experiment uses two versioned manifest *snapshots*, each with a
+`research:tts` plugin and its own exact-version `research:lexicon`
+dependency. `register_generation()` stores a lazy activation recipe in the
+original research `ProviderSlot` (no module import at registration). When
+activated, the recipe creates a **fresh** `PluginService` for that snapshot,
+checks the concrete inventory, and loads a **separate ephemeral**
+execution-scoped dependency graph. Retired generations close their execution
+context after their last tracked `ProviderSlot.acquire()` lease, then close
+the service. This avoids assuming that `PluginService.close()` alone
+shuts down managed singleton instances.
+
+Ten new `unittest` methods are authored to check:
+
+- Metadata-only registration without instance startup.
+- Manifest-based activation and exact dependency-version injection.
+- A new catalog snapshot while the first service remains alive, with old
+  and new calls pinned to different generations.
+- Shutdown of both provider and its execution-scoped dependency only after
+  final lease release.
+- Candidate rejection for missing pinned dependency, dependency cycle,
+  malformed manifest, missing host-required callable, and failed initialize.
+- Rejection of a mismatched host functional contract before registration.
+
+**Evidence boundary:** these files were syntax-checked with the local
+Python 3.13.5 interpreter and parsed against Python 3.11 grammar. The
+**10 integration tests have NOT been executed against an Invariant checkout**
+in the authoring environment: the private repository is not present in the
+local Python environment and GitHub connectivity is unavailable there.
+Therefore **public-facade integration is NOT YET SUPPORTED BY TEST EVIDENCE**.
+Previously, the other 62 tests passed in separately verified groups;
+the overall 72-test branch suite has not been run. GitHub CI was not used.
+
+Run this experiment *from a checked-out research branch*, in its local
+Python environment:
+
+```powershell
+Set-Location W:\dev\invariant-runtime
+git switch research/live-component-generations-v0-2026-10-11
+python -m unittest discover -s research/live_component_generations -p "test_public_facade_bridge.py" -v
+```
+
+For the prior experiments, run the appropriate individual test modules.
+Do not promote any research adapter to `invariant/` solely because it
+passes: the next design decision is how a production catalog-refresh and
+generation-binding contract should expose safe ownership and dependency
+snapshots. This stand-in lacks enforced artifact immutability, shared
+singleton ownership, policy admission, multi-provider routing, worker
+isolation and in-flight Python reference interception.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
