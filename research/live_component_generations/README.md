@@ -36,10 +36,13 @@ Only Python standard library is needed:
 python -m unittest discover -s research/live_component_generations -p "test_*.py" -v
 ```
 
-As authored, the two pilots ran **25 tests successfully on Python 3.13.5** in an
-isolated authoring environment. This does **not** prove Python 3.11/3.12/3.14
-compatibility, Invariant integration, core-suite results, or behavior under
-untrusted code. No GitHub CI run is required for this research branch.
+The three pilots ran **37 tests successfully on Python 3.13.5 (Linux)** in a
+local test environment: 10 generation binding, 15 exclusive stop-first, and
+12 subprocess lifecycle tests. This does **not** prove Python 3.11/3.12/3.14
+runtime compatibility, Windows behavior, Invariant integration, core-suite
+results, GPU/VRAM handling, or security against untrusted code. The new files
+also parse with Python 3.11 grammar, which is **not** equivalent to executing
+them on 3.11. No GitHub CI run was requested for this research branch.
 
 ## What this prototype does NOT do
 
@@ -49,8 +52,10 @@ untrusted code. No GitHub CI run is required for this research branch.
 - Enforce a Python interface or schema; provider claims about their functional
   contract are assumed, not validated.
 - Solve independent versioned artifact identity, persistence, or trust.
-- Provide worker isolation, timeouts, crash recovery, resource scheduling,
-  exclusive leases, VRAM accounting, or stop-first replacement.
+- Provide production-grade worker isolation, crash supervision/reconciliation,
+  resource scheduling, GPU/VRAM accounting, durable state, or policy admission.
+  The worker supervisor here is an **independent test adapter**, not the
+  existing Invariant isolated-plugin runtime.
 - Recover from side effects of a failed `start()` or arbitrary plugin code.
 - Prevent a caller retaining a raw Python instance **after** a managed lease.
 - Transfer live audio/stream state or handle long-running background jobs.
@@ -122,16 +127,65 @@ callbacks are test doubles. A boolean `is_resource_free` probe is only as
 trustworthy as its implementation. Existing Python references outside
 managed leases are untracked; migration of TTS/LLM sessions is unaddressed.
 
+## Worker process experiment: OS-owned resource, real child processes
+
+`worker_fixture.py`, `worker_supervisor.py`, and `test_worker_process.py`
+extend the **same research branch**, outside the shipped `invariant/` package.
+
+The parent Python process stays alive throughout. Tests copy the fixture into
+different temporary version directories and embed distinct code revisions
+(`v1`, `v2`). Their SHA-256 digests are pinned before activation, and
+subsequent mutation of staged code is rejected. The supervisor starts each
+generation with `subprocess.Popen`, waits for a structured `ready` response,
+and reaps the old worker before admitting the new one.
+
+Each worker binds a real **exclusive localhost TCP port**. The test host probes
+OS bind availability to demonstrate exclusivity and release after process
+exit. This is a *port ownership experiment*, not a GPU/VRAM test, not a trusted
+cross-process lock service, and not a general-purpose health or security proof.
+
+The process experiment adds **12 end-to-end unittest cases**:
+
+- distinct worker PIDs and code revisions while the host PID remains stable;
+- resource never double-bound, plus unsuccessful competing allocation;
+- drain of an in-flight managed lease before stopping the old worker;
+- failures before/after resource acquisition, startup readiness timeout,
+  and controlled fresh-v1 restoration after candidate cleanup;
+- graceful shutdown, terminate escalation, and a POSIX-only SIGTERM-ignore
+  scenario that escalates to kill (skipped on Windows);
+- staged artifact digest mismatch rejected before startup;
+- abrupt worker exit releases the OS resource, but does **not**
+  automatically update the binding to FAILED.
+
+**Verdict: WORKER_STOP_FIRST_HOST_CONTINUITY_SUPPORTED_IN_LINUX_TEST_FIXTURE.**
+OS subprocess exit and exclusive port release were observed locally. A provider
+unavailability window remains during switch, as required by stop-first.
+
+**Gaps before production:** real Invariant `PluginService`, real isolated
+workers, policy and dependency resolution, signed/trusted artifact acquisition,
+bounded invocation/deadline contracts, background crash monitoring, OS process
+tree ownership, state migration, and physical GPU release. In particular,
+after an unexpected child crash, `StopFirstSlot` still reports the stale
+generation as ACTIVE until the host explicitly reconciles it. The test records
+this as a **known limitation**, not an automatic recovery success.
+
+The 37-test local suite is run with the same stdlib command above. The
+previous 2,500-repeat claim only applies to the original 25 tests; the 12 new
+process tests have **not** been repeated 100 times.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
   `PluginService` surface, without depending on private runtime internals.
-- Extend stop-first experiments to real worker termination/release evidence,
-  externally owned handles, lifecycle shutdown deadlines, and crash recovery.
+- Integrate cautiously with the existing isolated-plugin worker and public
+  host facade, preserving its versioning, policy, IPC, and lifecycle contracts;
+  do not substitute the research fixture as a production implementation.
 - Investigate deferred admission/retry and resource-bounded install staging;
   neither is implemented in this prototype.
-- Test worker generations and immutable artifact paths so replacing code never
-  requires mutating `sys.modules` or an active plugin directory.
+- Investigate OS process-group ownership, worker descendants, reaping during
+  host crashes, cross-process resource arbitration, and real VRAM release.
+- Evolve artifact staging into a durable, verified install/switch record;
+  the current fixture only copies source to distinct temporary directories.
 - Explore idle activation, bounded resource budgets, multi-dependency generation
   snapshots, cleanup ownership, and crash-safe activation records.
 
