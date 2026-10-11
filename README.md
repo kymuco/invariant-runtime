@@ -1,22 +1,24 @@
 # Invariant Runtime
 
-**A small, policy-aware plugin runtime for Python.**
+**Extensibility, with boundaries.**
 
-Invariant lets a Python application discover versioned plugins, resolve dependencies, govern host capabilities, and own plugin lifecycle without pulling product behavior into the runtime.
+Invariant is a small, standard-library-only Python runtime for versioned plugins, explicit dependencies, policy-scoped capabilities, and owned lifecycle. It helps applications add capabilities without moving product logic into the runtime.
 
-- **Zero mandatory runtime dependencies** — production code uses only the Python standard library.
-- **Explicit contracts** — plugins declare identity, version, dependencies, and source metadata.
-- **Governed host access** — capabilities are exposed through policy-controlled interfaces.
-- **Deterministic lifecycle** — discovery, version selection, activation, rollback, and shutdown are runtime concerns.
+Python 3.11+ &nbsp; · &nbsp; No mandatory third-party runtime dependencies &nbsp; · &nbsp; 0.1.0 alpha &nbsp; · &nbsp; Apache-2.0
 
-> Invariant is infrastructure, not an application framework. Domain behavior, agents, companions, workflows, marketplace logic, and product UX belong outside the runtime.
+- **Versioned discovery** — explicit manifests identify plugins, versions, and sources.
+- **Dependency resolution** — plugin and capability requirements are declared rather than inferred.
+- **Governed host access** — capabilities are handles supplied according to host policy.
+- **Owned lifecycle** — the runtime manages activation, cleanup, and rollback of runtime-owned state.
+
+> Invariant is infrastructure, not an agent or application framework. Workflows, companions, approval, marketplaces, and product decisions belong to the application using it.
 
 ## Try it
 
-From the repository root:
+From a source checkout with Python 3.11 or newer (no test dependencies needed):
 
 ```bash
-python -m pip install -e ".[test]"
+python -m pip install .
 python examples/hello_plugin/run.py
 ```
 
@@ -26,7 +28,7 @@ Expected output:
 Hello, Invariant!
 ```
 
-The host-facing path is intentionally small:
+The supported host-facing API is intentionally small:
 
 ```python
 from invariant.api import PluginService
@@ -41,14 +43,14 @@ finally:
 
 Build the same plugin from an empty directory in **[Getting started](docs/getting-started.md)**.
 
-## Where to go next
+## Choose your starting point
 
 | Goal | Read |
 | --- | --- |
-| Build your first plugin | [Getting started](docs/getting-started.md) |
+| Add a capability by writing a plugin | [Getting started](docs/getting-started.md) |
+| Extend an existing Python application | [Public API](docs/reference/public-api.md) |
 | Understand the mental model | [Runtime model](docs/concepts/runtime-model.md) |
 | Design a production plugin | [Plugin authoring](docs/guides/plugin-authoring.md) |
-| Embed Invariant in an application | [Public API](docs/reference/public-api.md) |
 | Define or validate a manifest | [Manifest v1](docs/reference/manifest-v1.md) |
 | Work with host resources | [Capabilities](CAPABILITIES.md) |
 | Understand trust and isolation | [Security](SECURITY.md) |
@@ -58,7 +60,7 @@ The **[documentation home](docs/index.md)** contains the complete map.
 
 ## Public surface
 
-Invariant 0.1 deliberately keeps the supported import surface narrow:
+Invariant 0.1 keeps its supported imports deliberately narrow:
 
 ```python
 from invariant import __version__       # package metadata
@@ -70,7 +72,7 @@ Application code should prefer `invariant.api`. Plugin code should prefer `invar
 
 `invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`, and unexported objects inside the public packages remain implementation-level surfaces in the 0.1 line. See the [Public API reference](docs/reference/public-api.md) for the complete compatibility contract.
 
-Invariant also ships a `py.typed` marker for PEP 561 inline typing support.
+The package ships a `py.typed` marker for PEP 561 inline typing support.
 
 ## Runtime model
 
