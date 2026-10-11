@@ -49,7 +49,8 @@ workflow engine, marketplace, approval service, or HDE-specific component.
 
 - `invariant/api/` — supported host facade and policies.
 - `invariant/spec/` — public plugin contracts and capability references.
-- `invariant/load/`, `catalog/`, `exec/`, `ops/` — internal runtime layers.
+- `invariant/load/`, `invariant/catalog/`, `invariant/exec/`, and
+  `invariant/ops/` — internal runtime layers.
 - `examples/hello_plugin/` — checked introductory plugin/host example.
 - `tests/core/` — contracts, security guards, and regression coverage.
 - `docs/` — task-oriented guides, reference, and Zensical site content.
@@ -67,14 +68,23 @@ python -m pytest -q tests/core/test_public_api_contract.py tests/core/test_publi
 python -m pytest -q tests/core/test_documentation_contract.py tests/core/test_documentation_site_contract.py
 ```
 
-For runtime or shared-contract changes, also run `python -m pytest -q
-tests/core` when practical. Default pytest options exclude the `stress` and
+For runtime or shared-contract changes, also run the full core suite when
+practical:
+
+```bash
+python -m pytest -q tests/core
+``` Default pytest options exclude the `stress` and
 `soak` markers; run those suites only for a reason and with an appropriate
 environment.
 
-For documentation-site changes, optionally install `".[docs]"` and run
-`zensical build --clean --strict`. The README and example files remain usable
-without the documentation toolchain.
+For documentation-site changes, optionally run:
+
+```bash
+python -m pip install -e ".[docs]"
+zensical build --clean --strict
+```
+
+The README and example files remain usable without the documentation toolchain.
 
 ## Change discipline
 
