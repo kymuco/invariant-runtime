@@ -19,7 +19,7 @@ Hello, Invariant!
 
 ## Requirements
 
-- Python 3.13 or newer
+- Python 3.11 or newer (the package declares `requires-python >=3.11`)
 - Invariant Runtime installed in the active environment
 
 From a source checkout, install it with:
@@ -27,6 +27,8 @@ From a source checkout, install it with:
 ```bash
 python -m pip install .
 ```
+
+Invariant uses only the Python standard library at runtime. The optional `[test]` and `[docs]` extras are for development, not for running plugins.
 
 ## 1. Write the plugin
 
