@@ -36,7 +36,7 @@ Only Python standard library is needed:
 python -m unittest discover -s research/live_component_generations -p "test_*.py" -v
 ```
 
-As authored, the pilot ran **10 tests successfully on Python 3.13.5** in an
+As authored, the two pilots ran **25 tests successfully on Python 3.13.5** in an
 isolated authoring environment. This does **not** prove Python 3.11/3.12/3.14
 compatibility, Invariant integration, core-suite results, or behavior under
 untrusted code. No GitHub CI run is required for this research branch.
@@ -73,12 +73,57 @@ untrusted code. No GitHub CI run is required for this research branch.
 5. **No universal cleanup guarantee.** The pilot records shutdown failures;
    real process/worker ownership must be designed before promoting any of this.
 
+## Stop-first experiment: exclusive-resource replacement
+
+`stop_first.py` complements the first `prototype.py`. It uses the same
+metadata-only `ProviderSpec` but a different, standalone `StopFirstSlot`
+with one exclusive-resource binding. It never starts two instances
+concurrently in the success path.
+
+The observed sequence is:
+
+```text
+ACTIVE(v1) -> DRAINING (deny new uses) -> STOPPING(v1)
+  -> AWAITING_RELEASE -> STARTING(v2) -> ACTIVE(v2)
+```
+
+- Existing managed uses finish before the old instance is stopped.
+- A drain timeout **does not stop** the old instance: admissions reopen to v1.
+- A stopping error or unproven resource release results in explicit
+  `FAILED` and blocked new uses, **not** an unsafe new start.
+- Failed v2 startup allows a best-effort restart of v1 **only after**
+  the exclusive resource is again known free. Restored v1 is a **fresh
+  instance**; previous in-memory state is not retained.
+- A partially initialized v2 that keeps the resource is fenced to
+  `FAILED`; the prototype intentionally refuses to start v1 on top.
+- Concurrent replacements are serialized. Progress and failure are visible
+  through `snapshot()` and phase events.
+
+**Result:** the simple synchronous stop-first protocol supports *host
+continuity*, not *provider zero downtime*. New calls fail fast while the
+provider is draining, stopping, or restarting. An application may separately
+buffer or reroute them; the pilot does neither.
+
+The stop-first pilot adds **15 tests**, including delayed release,
+consumer exceptions, concurrent replacement, failed stop, failed restore,
+and candidate startup that leaks exclusive ownership. Together with the
+first pilot this is **25 stdlib unittest cases**.
+
+**Critical non-guarantees:** no real GPU measurements, OS process/worker
+termination proof, preemption of stuck blocking `start()`/`stop()`, cross-process
+resource arbitration, or trusted external health checks. The synchronous
+callbacks are test doubles. A boolean `is_resource_free` probe is only as
+trustworthy as its implementation. Existing Python references outside
+managed leases are untracked; migration of TTS/LLM sessions is unaddressed.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
   `PluginService` surface, without depending on private runtime internals.
-- Add a stop-first / deferred protocol with explicit exclusive resource claims,
-  no double allocation, admission control, timeouts, and failed-restart recovery.
+- Extend stop-first experiments to real worker termination/release evidence,
+  externally owned handles, lifecycle shutdown deadlines, and crash recovery.
+- Investigate deferred admission/retry and resource-bounded install staging;
+  neither is implemented in this prototype.
 - Test worker generations and immutable artifact paths so replacing code never
   requires mutating `sys.modules` or an active plugin directory.
 - Explore idle activation, bounded resource budgets, multi-dependency generation
