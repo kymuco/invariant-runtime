@@ -23,13 +23,18 @@ class CatalogOwnedHost:
     """Single catalog source for opt-in ephemeral research executions."""
 
     def __init__(self, roots: Iterable[Path]):
+        from invariant.load.env.env_manager import EnvManager
         from invariant.load.loader import PluginLoader
         from invariant.load.sources.manifest import ManifestSource
 
         self.roots = tuple(Path(root).resolve() for root in roots)
         if not self.roots:
             raise ValueError("roots required")
-        self.loader = PluginLoader([ManifestSource(list(self.roots))])
+        env_manager = EnvManager()
+        self.loader = PluginLoader(
+            [ManifestSource(list(self.roots), env_manager=env_manager)],
+            env_manager=env_manager,
+        )
         self.tracer = None
         self._views = CatalogViews(self._discover())
 
