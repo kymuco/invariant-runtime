@@ -94,6 +94,37 @@ class SingleCatalogOwnerTests(unittest.TestCase):
         self.assertEqual(before.resolve_graph("research:tts").root,
                          "research:tts@1.0.0")
 
+    def test_runtime_inspector_uses_retained_epoch_inventory(self):
+        from invariant.exec.caps.ids import CAP_INSPECTOR
+
+        host = self.initial()
+        with host.execution() as old:
+            old_inspector = old.capabilities.get(CAP_INSPECTOR)
+            initial = {
+                (entry["id"], entry["version"])
+                for entry in old_inspector.list_descriptors()
+            }
+            self.assertEqual(initial, {
+                ("research:lex", "1.0.0"),
+                ("research:tts", "1.0.0"),
+            })
+
+            self.add_v2()
+            host.publish(host.stage())
+            old_inventory_after = {
+                (entry["id"], entry["version"])
+                for entry in old_inspector.list_descriptors()
+            }
+            self.assertEqual(initial, old_inventory_after)
+            with host.execution() as current:
+                new_inspector = current.capabilities.get(CAP_INSPECTOR)
+                new_inventory = {
+                    (entry["id"], entry["version"])
+                    for entry in new_inspector.list_descriptors()
+                }
+                self.assertIn(("research:tts", "2.0.0"), new_inventory)
+                self.assertIn(("research:lex", "2.0.0"), new_inventory)
+
     def test_stale_compare_and_swap_does_not_alter_catalog(self):
         host = self.initial()
         self.add_v2()
