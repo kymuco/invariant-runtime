@@ -335,6 +335,86 @@ snapshots. This stand-in lacks enforced artifact immutability, shared
 singleton ownership, policy admission, multi-provider routing, worker
 isolation and in-flight Python reference interception.
 
+## Live catalog refresh within ONE PluginService (research pilot 7)
+
+Files: `catalog_epoch.py`, `test_catalog_epoch.py`,
+`live_service_catalog.py`, `test_live_service_catalog.py`.
+
+**Hypothesis:** add a new plugin and its pinned dependencies to a running
+host's *existing* `PluginService` without restarting the service, calling
+`registry.clear()`, rewriting existing version descriptors, or invalidating
+its managed-instance cache.
+
+The proof-of-concept separates operations:
+
+1. `stage()` runs actual loader discovery and detached dependency-resolution
+   preflight; **no registry publication or plugin activation** occurs.
+2. Published metadata generations are **append-only** and keyed by exact
+   `id@version` plus a fingerprint of manifest and Python source bytes.
+   Removal or same-version mutation is rejected; all plugin dependencies
+   must use pinned, nonoptional `EXECUTION` refs in this narrow pilot.
+3. `publish(plan)` performs fresh discovery to reject stale plans and
+   filesystem changes between stage/publish, then publishes the complete
+   descriptor table by one pointer assignment under the existing registry
+   lock. The service object, resolver wiring, and `_instances` map remain
+   unchanged.
+4. `register_live_version()` uses an explicit version and an
+   **ephemeral** `ExecutionContext` inside the existing service. The
+   previously explored ProviderSlot leases guard the old context until its
+   last tracked operation finishes, and its dependencies are then shut down.
+
+**Evidence so far:** `catalog_epoch.py` passed **16/16** Python 3.13.5
+stdlib tests locally (additive epochs, graph/cycle checks, no-op, stale
+stage, same-version immutability, callback failure, atomic reader snapshots).
+An additional **7/7 local adapter-contract checks** passed against tiny
+fake service/registry/resolver implementations; those local-only checks are
+*not* production integration evidence. Source files were Python-syntax
+checked locally. The **14 new real-PluginService integration tests** are
+authored but have **not been run against a real Invariant checkout in this
+environment**. Do not report this pilot as end-to-end verified. Previous
+tests from earlier research pilots remain separate; GitHub CI was not run.
+
+**Important restriction:** the live-service adapter deliberately accesses
+`service.registry._lock` and assigns `service.registry._descriptors`.
+These are *private implementation details*. This is **research only**,
+not a supported plugin API, and does not establish a production refresh
+contract. The actual public API currently has no in-place refresh method.
+No files under `invariant/`, `tests/core/`, or `pyproject.toml` change.
+
+**Known boundaries:**
+
+- This demonstrates **add-only catalog publication**, not remote package
+  acquisition, removal/uninstall, policy admission, or managed in-place code
+  reload. Already running modules stay on their original code paths.
+- `latest` remains dynamic across publication; **only exact pinned refs**
+  protect old generations from dependency drift. An unrelated consumer
+  resolving multiple unpinned dependencies during a concurrent refresh is
+  not covered by the experiment.
+- Manifest/source SHA-256 checks are useful race detection but **do not**
+  make a mutable local artifact immutable. No hostile filesystem adversary,
+  symlink-race closure, signed packages, or complete artifact store.
+- No effect rollback, live streaming state transfer, worker supervision
+  integration, singleton reference tracking, or cross-process atomicity.
+- Strict research rules exclude optional, non-EXECUTION and isolated package
+  dependencies. The production feature must decide graph snapshot ownership
+  before relaxing those restrictions.
+
+To run only real integration tests **from the research branch checkout**:
+
+```powershell
+python -m unittest discover -s research/live_component_generations -p "test_live_service_catalog.py" -v
+```
+
+To run the 16 stdlib tests in any Python 3.11+ environment:
+
+```powershell
+python -m unittest discover -s research/live_component_generations -p "test_catalog_epoch.py" -v
+```
+
+**Next decision:** whether core should ever expose an explicit,
+transactional `prepare_catalog / publish_catalog` interface with immutable
+dependency snapshots. Do not promote the private registry assignment as-is.
+
 ## Next independent experiments (not implemented)
 
 - Link a binding to real descriptors resolved through the public
