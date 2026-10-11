@@ -67,6 +67,10 @@ class CatalogView:
         """Match real Invariant id/latest resolution, fixed to this view."""
         return self.__registry.resolve(ref)
 
+    def list(self, *, category: str | None = None):
+        """Frozen descriptor inventory for the existing RuntimeInspector path."""
+        return self.__registry.list(category=category)
+
     def resolve_graph(self, ref: str) -> ResolvedGraph:
         from invariant.exec.runtime.resolver import DependencyResolver
 
