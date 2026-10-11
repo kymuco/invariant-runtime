@@ -158,6 +158,35 @@ class CatalogViewGateATests(unittest.TestCase):
         self.assertTrue(all(not thread.is_alive() for thread in threads))
         self.assert_matching_graph(self, self.views.snapshot())
 
+    def test_in_flight_reader_pins_view_across_publication(self):
+        stage, fresh = self.add_second()
+        captured = threading.Event()
+        proceed = threading.Event()
+        results = {}
+
+        def reader():
+            old = self.views.snapshot()
+            captured.set()
+            if not proceed.wait(timeout=5):
+                results["error"] = "reader was never released"
+                return
+            results["graph"] = old.resolve_graph("research:tts")
+
+        thread = threading.Thread(target=reader)
+        thread.start()
+        try:
+            self.assertTrue(captured.wait(timeout=5))
+            new = self.views.publish(stage, fresh)
+        finally:
+            proceed.set()
+            thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertNotIn("error", results)
+        self.assertEqual(results["graph"].root, "research:tts@1.0.0")
+        self.assertEqual(results["graph"].epoch, 1)
+        self.assertEqual(new.resolve_graph("research:tts").root, "research:tts@2.0.0")
+        self.assertEqual(new.epoch, 2)
+
     def test_noop_keeps_same_view_object(self):
         before = self.views.snapshot()
         fresh = self.source._discover()
