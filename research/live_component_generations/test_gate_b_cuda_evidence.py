@@ -6,11 +6,13 @@ proof is a separate explicit script that fails if CUDA evidence is missing.
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from gate_b_cuda_windows_smoke import (
     MIB,
     failure_chain,
     validate_cuda_ready,
+    cuda_worker_interpreter,
     memory_drop_observed,
     memory_recovered,
 )
@@ -118,6 +120,31 @@ class NativeCudaEvidencePolicyTests(unittest.TestCase):
         self.assertIn("pid: expected=123, observed=321", diagnostic)
         self.assertIn("revision: expected='v1', observed='bad'", diagnostic)
         self.assertIn("mib: expected=32, observed=16", diagnostic)
+
+
+    def test_windows_venv_selects_real_python_with_venv_identity(self):
+        import os
+        import sys
+
+        with patch.object(sys, "platform", "win32"):
+            with patch.object(sys, "executable", r"C:\venv\Scripts\python.exe"):
+                with patch.object(sys, "_base_executable", r"C:\Python\python.exe", create=True):
+                    binary, env = cuda_worker_interpreter()
+        self.assertEqual(binary, r"C:\Python\python.exe")
+        self.assertIsNotNone(env)
+        self.assertEqual(
+            env["__PYVENV_LAUNCHER__"], r"C:\venv\Scripts\python.exe"
+        )
+
+    def test_regular_python_does_not_change_subprocess_environment(self):
+        import sys
+
+        with patch.object(sys, "platform", "win32"):
+            with patch.object(sys, "executable", r"C:\Python\python.exe"):
+                with patch.object(sys, "_base_executable", r"C:\Python\python.exe", create=True):
+                    binary, env = cuda_worker_interpreter()
+        self.assertEqual(binary, r"C:\Python\python.exe")
+        self.assertIsNone(env)
 
 
 if __name__ == "__main__":
