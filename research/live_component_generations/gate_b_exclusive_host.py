@@ -22,6 +22,7 @@ from gate_a_catalog_owned_host import discover_candidates, research_manifest_loa
 from gate_a_catalog_view import CatalogView
 from gate_a_pinned_execution import open_pinned_execution
 from gate_a_readiness_host import PublishedRoute
+from gate_c_asset_fence import AssetFence, AssetSeal
 from prototype import ProviderSpec, ProviderUnavailable
 from stop_first import Phase, Snapshot, StopFirstSlot
 
@@ -34,6 +35,7 @@ class ExclusiveStage:
     root_key: str
     signature: tuple[tuple[str, str, tuple[str, ...]], ...]
     ticket: str
+    asset_seal: AssetSeal | None = None
 
 
 class RealStopFirstHost:
@@ -51,6 +53,7 @@ class RealStopFirstHost:
         root_ref: str,
         is_resource_free: Callable[[], bool],
         method: str = "synthesize",
+        model_asset_paths: Callable[[str], Iterable[Path]] | None = None,
     ):
         if not root_ref or "@" in root_ref:
             raise ValueError("root_ref must be an unversioned plugin identifier")
@@ -65,6 +68,9 @@ class RealStopFirstHost:
         self.tracer = None
         self.root_ref = root_ref
         self.method = method
+        self._asset_fence = (
+            AssetFence(model_asset_paths) if model_asset_paths is not None else None
+        )
         self._management = RLock()
         self._installed: set[str] = set()
         self._slot = StopFirstSlot(root_ref, is_resource_free=is_resource_free)
@@ -78,22 +84,36 @@ class RealStopFirstHost:
         found = CatalogEpochs._normalize(candidates)
         return CatalogEpochs._signature(found)
 
-    def _install(self, view: CatalogView, root_key: str, ticket: str):
-        # Each ticket is a distinct research activation attempt even if a
-        # drain timeout later permits retry of that same stage.
+    def _install(
+        self, view: CatalogView, root_key: str, ticket: str,
+        *, asset_seal: AssetSeal | None = None,
+    ):
+        # A selected candidate's asset seal belongs to the generation
+        # starter. A rollback re-verifies the original version's seal.
+        if self._asset_fence is not None and asset_seal is None:
+            asset_seal = self._asset_fence.pin(root_key)
         spec = ProviderSpec(
             self.root_ref,
             self.root_ref,
             ticket,
-            lambda: self._start(view, root_key),
+            lambda: self._start(view, root_key, asset_seal),
             self._stop,
         )
         self._slot.install(spec)
         self._installed.add(ticket)
         return spec.identity
 
-    def _start(self, view: CatalogView, root_key: str):
+    def _start(
+        self, view: CatalogView, root_key: str,
+        asset_seal: AssetSeal | None = None,
+    ):
         # Called ONLY after stop-first has verified is_resource_free().
+        # Revalidate just before opening the real ExecutionContext; the
+        # stage/preflight checks alone cannot bind model asset bytes.
+        if self._asset_fence is not None:
+            if asset_seal is None:
+                raise StalePlan("exclusive candidate missing model asset seal")
+            self._asset_fence.verify(asset_seal)
         context = open_pinned_execution(self, view)
         try:
             plugin = context.get(root_key)
@@ -141,6 +161,9 @@ class RealStopFirstHost:
         root_key = candidate.resolve_graph(self.root_ref).root
         if root_key not in added:
             raise CatalogConflict("exclusive switch requires new selected root version")
+        asset_seal = (
+            self._asset_fence.pin(root_key) if self._asset_fence is not None else None
+        )
         return ExclusiveStage(
             owner=self,
             base_identity=current.active,
@@ -148,6 +171,7 @@ class RealStopFirstHost:
             root_key=root_key,
             signature=CatalogEpochs._signature(found),
             ticket=uuid4().hex,
+            asset_seal=asset_seal,
         )
 
     def replace(
@@ -171,6 +195,10 @@ class RealStopFirstHost:
             # Validate before fencing admission or tearing down old plugin.
             if self._signature(discover_candidates(self.roots, self.loader)) != staged.signature:
                 raise StalePlan("source changed after exclusive stage")
+            if self._asset_fence is not None:
+                if staged.asset_seal is None:
+                    raise StalePlan("exclusive candidate missing model asset seal")
+                self._asset_fence.verify(staged.asset_seal)
             status = self._slot.snapshot()
             if self._slot.is_closed:
                 raise RuntimeError("exclusive slot is closed")
@@ -179,7 +207,10 @@ class RealStopFirstHost:
             if status.phase is not Phase.ACTIVE or status.active != staged.base_identity:
                 raise StalePlan("active exclusive route changed since staging")
             if staged.ticket not in self._installed:
-                self._install(staged.view, staged.root_key, staged.ticket)
+                self._install(
+                    staged.view, staged.root_key, staged.ticket,
+                    asset_seal=staged.asset_seal,
+                )
             self._slot.replace(
                 self.root_ref,
                 staged.ticket,
