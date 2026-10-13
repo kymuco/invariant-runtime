@@ -1,6 +1,6 @@
 # Gate C.1 — opt-in bounded call port over existing Gate B owners
 
-**Status: authored, not yet verified on user Windows. Research-only.**
+**Status: research PASS on user Windows (2026-10-13); not production approved.**
 No code or public export changed under invariant/, and main remains untouched.
 
 ## Input evidence
@@ -101,3 +101,20 @@ Hard cap 16..64 MiB per worker, with >=512 MiB free headroom and at most one own
 - Do not use this sidecar to silently hot-swap a legacy raw PluginService.get() reference. A future production owner path needs explicit opt-in and a wider baseline test gate.
 
 Gate C.1 should be classified as **research PASS** only after BOTH the new scoped Windows test results and the optional native GPU E2E are confirmed, not merely because earlier Gate B was green.
+
+
+## Windows completion evidence (2026-10-13)
+
+- User reports full Gate C.1 scoped CPU regression set green (96 methods expected).
+- Explicit native CUDA managed-port E2E marker: `GATE_C1_MANAGED_GPU_E2E_OK`.
+- Reported exit code: `GATE_C1_GPU_EXIT=0`.
+- Epoch 2, calls `1.0.0:first` and `2.0.0:second`.
+- Worker PIDs `14272` -> `8496`, at 32 MiB requested allocation each.
+- GPU 12226 MiB total; initial/free after shutdown 6878 / 6878 MiB.
+- During v1, observed global free-memory reduction 172 MiB (context overhead included).
+
+This confirms the research-only synchronous managed-invoke path on this
+machine. It does not certify per-process VRAM accounting, model-weight
+integrity, streaming, mixed scopes, failure-rate targets or production
+compatibility. The next separate Gate C.2 experiments with explicit
+weight/config file SHA256 pinning before exclusive resource teardown.
