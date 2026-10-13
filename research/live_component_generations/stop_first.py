@@ -78,11 +78,14 @@ class StopFirstSlot:
         self._active: tuple[ProviderSpec, object] | None = None
         self._users = 0
         self._events: list[str] = []
+        self._closed = False
 
     def install(self, spec: ProviderSpec) -> None:
         if spec.contract != self.contract or not all(spec.identity):
             raise ValueError("invalid provider contract or identity")
         with self._cv:
+            if self._closed:
+                raise RuntimeError("exclusive slot is closed")
             if spec.identity in self._catalog:
                 raise ValueError("revision already installed")
             self._catalog[spec.identity] = spec
@@ -148,6 +151,8 @@ class StopFirstSlot:
         key = (plugin_id, revision)
         with self._update:
             with self._cv:
+                if self._closed:
+                    raise RuntimeError("exclusive slot is closed")
                 spec = self._catalog[key]  # fail before changing admission
                 if self._phase is Phase.FAILED:
                     raise RuntimeError("slot is FAILED; manual recovery required")
@@ -212,3 +217,57 @@ class StopFirstSlot:
                 self._active = (spec, candidate)
                 self._set(Phase.ACTIVE)
             return True
+
+    def close(
+        self,
+        *,
+        drain_timeout_s: float = 1.0,
+        release_timeout_s: float = 1.0,
+    ) -> None:
+        """Terminal stop-first drain for host-owned research fixtures.
+
+        Refuse new admission immediately during draining. A drain timeout
+        restores ACTIVE admission so the caller may retry rather than
+        silently interrupting an in-flight call. A stop/release failure
+        leaves FAILED and fences all new calls. No release is presumed
+        merely from successful invocation of provider.stop().
+        """
+        if drain_timeout_s < 0 or release_timeout_s < 0:
+            raise ValueError("timeouts must be nonnegative")
+        with self._update:
+            with self._cv:
+                if self._closed:
+                    return
+                if self._phase is Phase.FAILED:
+                    self._closed = True
+                    raise UnsafeRelease("slot already FAILED; manual resource recovery required")
+                if self._phase not in (Phase.EMPTY, Phase.ACTIVE):
+                    raise RuntimeError("unexpected phase during close")
+                previous = self._active
+                if previous is None:
+                    self._closed = True
+                    self._set(Phase.EMPTY)
+                    return
+                self._set(Phase.DRAINING)
+                deadline = time.monotonic() + drain_timeout_s
+                while self._users:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        self._set(Phase.ACTIVE)
+                        raise DrainTimeout("outstanding leases exceeded close deadline")
+                    self._cv.wait(timeout=remaining)
+                self._closed = True
+                self._set(Phase.STOPPING)
+            try:
+                previous[0].stop(previous[1])
+            except Exception as exc:
+                self._set(Phase.FAILED)
+                raise StopFailed("final provider stop failed; resource ownership uncertain") from exc
+            with self._cv:
+                self._active = None
+            try:
+                self._await_free(time.monotonic() + release_timeout_s)
+            except Exception:
+                self._set(Phase.FAILED)
+                raise
+            self._set(Phase.EMPTY)
