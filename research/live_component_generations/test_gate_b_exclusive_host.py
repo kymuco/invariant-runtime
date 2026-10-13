@@ -25,6 +25,7 @@ class ExclusiveRealPluginTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.claim = self.root / "one-device.claim"
+        self.events = self.root / "lifecycle.log"
         self.write_version("1.0.0")
 
     def write_version(
@@ -59,6 +60,7 @@ class ExclusiveRealPluginTests(unittest.TestCase):
             "        self.lexicon = lexicon\n"
             "        self.closed = False\n"
             f"        self.resource_file = Path({str(self.claim)!r})\n"
+            f"        with Path({str(self.events)!r}).open('a', encoding='utf-8') as log: log.write('try:{version}\\n')\n"
         )
         if fail_before:
             init += "        raise RuntimeError('candidate startup failed before allocate')\n"
@@ -73,6 +75,8 @@ class ExclusiveRealPluginTests(unittest.TestCase):
 
         stop = (
             "    def shutdown(self):\n"
+            "        from pathlib import Path\n"
+            f"        with Path({str(self.events)!r}).open('a', encoding='utf-8') as log: log.write('stop:{version}\\n')\n"
             "        self.closed = True\n"
         )
         if not stop_stuck and not leaks_resource:
@@ -125,6 +129,9 @@ class ExclusiveRealPluginTests(unittest.TestCase):
         self.assertEqual(view.epoch, 2)
         self.assertEqual(initial.epoch, 1)
         self.assertEqual(self.claim.read_text(encoding="utf-8"), "2.0.0")
+        self.assertEqual(self.events.read_text(encoding="utf-8").splitlines(), [
+            "try:1.0.0", "stop:1.0.0", "try:2.0.0",
+        ])
         self.assertEqual(h.call("ok"), "tts-2.0.0:lex-2.0.0:ok")
         self.assertEqual(h.status().phase, Phase.ACTIVE)
 
@@ -201,6 +208,9 @@ class ExclusiveRealPluginTests(unittest.TestCase):
             h.replace(stage, release_timeout_s=0)
         self.assertEqual(h.status().phase, Phase.FAILED)
         self.assertEqual(self.claim.read_text(encoding="utf-8"), "1.0.0")
+        self.assertEqual(self.events.read_text(encoding="utf-8").splitlines(), [
+            "try:1.0.0", "stop:1.0.0",
+        ])
         with self.assertRaises(ProviderUnavailable):
             h.call("blocked")
         with self.assertRaisesRegex(RuntimeError, "manual recovery"):
