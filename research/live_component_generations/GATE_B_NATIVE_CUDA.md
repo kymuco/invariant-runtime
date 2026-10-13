@@ -149,3 +149,48 @@ Then, if appropriate, retry the same unchanged full smoke:
 ~~~
 
 No VRAM thresholds were reduced. Please capture the actual error chain if it fails.
+
+## 2026-10-13: Correct READY v1, rejected identity; Windows venv redirector
+
+User reran full CUDA smoke; the cause chain exposed:
+
+    CandidateFailed(restored=False) <- RuntimeError: CUDA worker not READY:
+    {'kind':'ready','revision':'v1','mib':32,'pid':21992, ...}
+
+Thus v1's native CUDA allocation and READY JSON succeeded. The original
+launcher compared the worker's real os.getpid() with subprocess.Popen.pid.
+On Windows CPython venv, sys.executable can be a redirector; that redirector
+spawns a separate base-Python process, so its PID is not the worker PID.
+CPython PC/venvlauncher.c and historical Windows multiprocessing bug
+bpo-39439 document the child/launcher distinction and __PYVENV_LAUNCHER__.
+
+The research launch path now uses sys._base_executable directly when
+sys.executable differs on Windows, sets __PYVENV_LAUNCHER__ to retain
+venv identity, and requires the *true* Popen child PID to match READY/PONG.
+No PID validation has been relaxed. It also checks a live ping response
+before exposing the worker handle and prints explicit mismatches, returncode,
+post-ready messages and bounded stderr diagnostics on failures.
+
+The CPU-only evidence test file now contains 13 tests (6 original, 2 chain
+diagnostics, 3 READY-validation checks, 2 Windows interpreter-selection
+checks); actual Windows runtime test of this revision remains pending.
+
+Run after fetching the branch:
+
+~~~powershell
+Set-Location W:\dev\invariant-runtime
+git pull --ff-only origin research/catalog-snapshot-gate-a-2026-10-11
+$python = '.\.venv\Scripts\python.exe'
+if (-not (Test-Path $python)) { $python = 'python' }
+& $python -m unittest discover -s research/live_component_generations -p test_gate_b_cuda_evidence.py -v
+if ($LASTEXITCODE -ne 0) { throw 'GATE_B3_EVIDENCE_FAILED' }
+& $python research/live_component_generations/gate_b_cuda_windows_smoke.py --device 0 --mib 32
+Write-Host "GATE_B3_EXIT=$LASTEXITCODE"
+~~~
+
+Native PASS remains unproven until an actual v1->v2->close Windows run
+emits GATE_B3_NATIVE_GPU_SMOKE_OK with expected process and memory evidence.
+
+References:
+- https://github.com/python/cpython/blob/main/PC/venvlauncher.c
+- https://bugs.python.org/issue39439
