@@ -258,6 +258,7 @@ class ExclusiveRealPluginTests(unittest.TestCase):
 
     def test_final_close_drains_and_confirms_release(self):
         h = self.host()
+        staged = self.stage_v2(h)  # metadata only; no candidate allocation
         self.assertTrue(self.claim.exists())
         h.close()
         self.assertFalse(self.claim.exists())
@@ -266,7 +267,7 @@ class ExclusiveRealPluginTests(unittest.TestCase):
         with self.assertRaises(ProviderUnavailable):
             h.call("closed")
         with self.assertRaisesRegex(RuntimeError, "closed"):
-            h.replace(self.stage_v2(h))
+            h.replace(staged)
 
     def test_close_drain_timeout_never_interrupts_borrower(self):
         h = self.host()
