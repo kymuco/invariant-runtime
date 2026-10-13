@@ -9,6 +9,7 @@ import unittest
 
 from gate_b_cuda_windows_smoke import (
     MIB,
+    failure_chain,
     memory_drop_observed,
     memory_recovered,
 )
@@ -68,6 +69,29 @@ class NativeCudaEvidencePolicyTests(unittest.TestCase):
         self.assertFalse(memory_drop_observed(
             2048 * MIB, 2033 * MIB, 32 * MIB,
         ))
+
+
+    def test_worker_failure_chain_does_not_hide_cuda_reason(self):
+        try:
+            try:
+                raise RuntimeError("CUDA worker not READY: cudaError=out-of-memory")
+            except RuntimeError as worker:
+                raise RuntimeError("candidate startup failed; restored=False") from worker
+        except RuntimeError as outer:
+            diagnostic = failure_chain(outer)
+        self.assertIn("candidate startup failed; restored=False", diagnostic)
+        self.assertIn("CUDA worker not READY", diagnostic)
+        self.assertIn("out-of-memory", diagnostic)
+
+    def test_worker_failure_chain_survives_hidden_context(self):
+        try:
+            try:
+                raise ValueError("child bootstrap failed")
+            except ValueError:
+                raise RuntimeError("worker stopped") from None
+        except RuntimeError as outer:
+            diagnostic = failure_chain(outer)
+        self.assertEqual(diagnostic, "RuntimeError: worker stopped")
 
 
 if __name__ == "__main__":
