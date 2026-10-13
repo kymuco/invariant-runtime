@@ -54,6 +54,28 @@ class CudaUnavailable(RuntimeError):
     pass
 
 
+def failure_chain(error: BaseException) -> str:
+    """Render the actual CUDA worker/startup cause, not only CandidateFailed.
+
+    StopFirstSlot legitimately converts the first unavailable generation
+    into CandidateFailed(restored=False). That wrapper must not hide the
+    child's structured CUDA error or a worker launch/ready timeout.
+    """
+    parts: list[str] = []
+    visited: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        parts.append(f"{type(current).__name__}: {current}")
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif not current.__suppress_context__:
+            current = current.__context__
+        else:
+            current = None
+    return " <- caused by <- ".join(parts)
+
+
 class CudaDriver:
     """Tiny Windows CUDA Driver API adapter. One current context per thread."""
 
@@ -340,5 +362,5 @@ if __name__ == "__main__":
     try:
         smoke(args.device, args.mib, args.min_headroom_mib)
     except BaseException as exc:
-        print("GATE_B3_NATIVE_GPU_SMOKE_NOT_PROVEN: " + repr(exc), file=sys.stderr)
+        print("GATE_B3_NATIVE_GPU_SMOKE_NOT_PROVEN: " + failure_chain(exc), file=sys.stderr)
         raise SystemExit(1) from exc
