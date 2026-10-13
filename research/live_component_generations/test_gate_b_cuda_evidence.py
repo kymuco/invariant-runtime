@@ -10,6 +10,7 @@ import unittest
 from gate_b_cuda_windows_smoke import (
     MIB,
     failure_chain,
+    validate_cuda_ready,
     memory_drop_observed,
     memory_recovered,
 )
@@ -92,6 +93,31 @@ class NativeCudaEvidencePolicyTests(unittest.TestCase):
         except RuntimeError as outer:
             diagnostic = failure_chain(outer)
         self.assertEqual(diagnostic, "RuntimeError: worker stopped")
+
+
+    def test_ready_message_and_alive_process_pass(self):
+        msg = {"kind": "ready", "pid": 123, "revision": "v1", "mib": 32}
+        self.assertIsNone(validate_cuda_ready(
+            msg, expected_pid=123, revision="v1", mib=32, exit_code=None
+        ))
+
+    def test_ready_message_from_already_exited_worker_is_rejected(self):
+        msg = {"kind": "ready", "pid": 123, "revision": "v1", "mib": 32}
+        with self.assertRaisesRegex(RuntimeError, "exited after READY; returncode=0"):
+            validate_cuda_ready(
+                msg, expected_pid=123, revision="v1", mib=32, exit_code=0
+            )
+
+    def test_ready_mismatch_shows_each_specific_field(self):
+        msg = {"kind": "ready", "pid": 321, "revision": "bad", "mib": 16}
+        with self.assertRaises(RuntimeError) as error:
+            validate_cuda_ready(
+                msg, expected_pid=123, revision="v1", mib=32, exit_code=None
+            )
+        diagnostic = str(error.exception)
+        self.assertIn("pid: expected=123, observed=321", diagnostic)
+        self.assertIn("revision: expected='v1', observed='bad'", diagnostic)
+        self.assertIn("mib: expected=32, observed=16", diagnostic)
 
 
 if __name__ == "__main__":
