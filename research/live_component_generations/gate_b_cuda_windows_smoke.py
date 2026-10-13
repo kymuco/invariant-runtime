@@ -30,6 +30,29 @@ from worker_supervisor import WorkerHandle
 MIB = 1024 * 1024
 
 
+def validate_cuda_ready(
+    message: dict, *, expected_pid: int, revision: str, mib: int,
+    exit_code: int | None,
+) -> None:
+    """Explain EACH startup mismatch; a READY line alone is not liveness."""
+    expected = {
+        "kind": "ready", "pid": expected_pid,
+        "revision": revision, "mib": mib,
+    }
+    mismatches = [
+        f"{key}: expected={want!r}, observed={message.get(key)!r}"
+        for key, want in expected.items() if message.get(key) != want
+    ]
+    if exit_code is not None:
+        mismatches.append(f"worker exited after READY; returncode={exit_code}")
+    if mismatches:
+        raise RuntimeError(
+            "CUDA worker startup verification failed: "
+            + "; ".join(mismatches)
+            + f"; message={message!r}"
+        )
+
+
 def memory_drop_observed(baseline_free: int, active_free: int, allocated: int) -> bool:
     """Require a meaningful independent physical-memory observation."""
     if not all(isinstance(x, int) and x >= 0 for x in
@@ -235,25 +258,39 @@ def launch_cuda_worker(revision: str, device: int, mib: int) -> WorkerHandle:
     handle = WorkerHandle(proc, output, revision=revision)
     try:
         msg = handle.wait_message(timeout=12)
+        validate_cuda_ready(
+            msg, expected_pid=proc.pid, revision=revision, mib=mib,
+            exit_code=proc.poll(),
+        )
+        # A live process that wrote READY but no longer processes stdin is
+        # not serviceable. Probe the actual parent's request/response path.
+        pong = handle.request("ping", timeout=3)
         if (
-            msg.get("kind") != "ready"
-            or msg.get("pid") != proc.pid
-            or msg.get("revision") != revision
-            or msg.get("mib") != mib
+            pong.get("kind") != "pong"
+            or pong.get("revision") != revision
+            or pong.get("pid") != proc.pid
             or proc.poll() is not None
         ):
-            raise RuntimeError(f"CUDA worker not READY: {msg!r}")
+            raise RuntimeError(
+                "CUDA worker READY but ping/liveness invalid: "
+                f"pong={pong!r}; returncode={proc.poll()}"
+            )
         return handle
-    except BaseException:
-        # No orphan GPU allocation, including failed partial startup.
+    except BaseException as cause:
+        # No orphan GPU allocation, including failed partial startup. Do not
+        # replace the original startup error with cleanup success.
         try:
-            handle.stop(graceful_timeout=1, escalation_timeout=2)
+            report = handle.stop(graceful_timeout=1, escalation_timeout=2)
         except BaseException as exc:
             raise RuntimeError(
                 "CUDA worker cleanup unproven; investigate child PID "
                 + str(proc.pid)
             ) from exc
-        raise
+        raise RuntimeError(
+            f"CUDA child startup rejected: pid={proc.pid}, "
+            f"returncode={proc.poll()}, cleanup={report.method}, "
+            f"cause={type(cause).__name__}: {cause}"
+        ) from cause
 
 
 def smoke(device: int, mib: int, min_headroom_mib: int) -> None:
