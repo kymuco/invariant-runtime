@@ -99,6 +99,11 @@ class StopFirstSlot:
         with self._cv:
             return tuple(self._events)
 
+    @property
+    def is_closed(self) -> bool:
+        with self._cv:
+            return self._closed
+
     def _set(self, phase: Phase) -> None:
         with self._cv:
             self._phase = phase
