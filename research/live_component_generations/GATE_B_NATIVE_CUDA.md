@@ -111,3 +111,41 @@ Need a host-owned resource monitor and worker-identity contract, full
 OS-level release evidence appropriate to target hardware, operational
 crash/recovery policy, full baseline tests, and a no-raw-ref API
 guarantee. The experiment uses a tiny CUDA buffer and no LLM weights.
+
+## Windows incident 2026-10-13: first CUDA child did not start
+
+Observed on user's Windows checkout at e72114385c3152763f3b0fbd6291022987056890:
+
+- 6/6 CPU-only evidence tests: PASS.
+- Native process smoke: CandidateFailed('candidate startup failed; restored=False').
+- This occurred during initial v1 worker launch. No successful v1->v2 replacement or physical VRAM release was proved.
+- The wrapper was hiding the worker/driver underlying failure; do not assume CUDA or VRAM shortage from this message alone.
+
+Gate B.3 has been amended to display its full chained cause, and two
+CPU-only tests were added for this diagnostic behavior (8 total).
+Hardware proof remains NOT PROVEN until the full native smoke succeeds.
+
+### One-worker diagnostic, independent of StopFirstSlot
+
+Run after pulling the updated research branch; this is a 32 MiB single
+worker allocation and immediately requests a clean shutdown:
+
+~~~powershell
+Set-Location W:\dev\invariant-runtime
+git pull --ff-only origin research/catalog-snapshot-gate-a-2026-10-11
+$python = '.\.venv\Scripts\python.exe'
+if (-not (Test-Path $python)) { $python = 'python' }
+'{"op":"stop"}' | & $python research/live_component_generations/gate_b_cuda_windows_smoke.py --worker --revision diag --device 0 --mib 32
+~~~
+
+Expected from the child: one JSON 'ready' record and one 'stopping' record;
+if JSON kind='error', its error field is the real CUDA diagnostic.
+Exit code must be zero. A successful direct worker run is NOT Gate B.3 PASS.
+
+Then, if appropriate, retry the same unchanged full smoke:
+
+~~~powershell
+& $python research/live_component_generations/gate_b_cuda_windows_smoke.py --device 0 --mib 32
+~~~
+
+No VRAM thresholds were reduced. Please capture the actual error chain if it fails.
