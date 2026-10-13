@@ -215,6 +215,10 @@ def worker_main(revision: str, device: int, mib: int) -> int:
                 return 0
             else:
                 emit(kind="error", error="unknown command")
+        # A CUDA READY worker exiting without a stop request is abnormal
+        # for host-managed operation. Surface the reason rather than only
+        # a misleading earlier READY record.
+        emit(kind="stdin_eof", pid=os.getpid(), reason="worker stdin reached EOF")
         return 0
     except BaseException as exc:
         emit(kind="error", error=repr(exc), pid=os.getpid())
@@ -237,7 +241,7 @@ def launch_cuda_worker(revision: str, device: int, mib: int) -> WorkerHandle:
         [sys.executable, "-u", str(script), "--worker",
          "--revision", revision, "--device", str(device), "--mib", str(mib)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, encoding="utf-8", text=True, bufsize=1,
+        stderr=subprocess.PIPE, encoding="utf-8", text=True, bufsize=1,
         cwd=str(script.parent),
     )
     output: queue.Queue[dict | None] = queue.Queue()
@@ -255,6 +259,23 @@ def launch_cuda_worker(revision: str, device: int, mib: int) -> WorkerHandle:
             proc.stdout.close()
 
     Thread(target=reader, daemon=True, name=f"cuda-research-{proc.pid}").start()
+    # Drain stderr too; otherwise a noisy driver failure can block the child.
+    # Preserve only a bounded tail for startup diagnostics.
+    stderr_tail: list[str] = []
+
+    def read_stderr():
+        assert proc.stderr is not None
+        try:
+            for line in proc.stderr:
+                stderr_tail.append(line.rstrip()[:600])
+                del stderr_tail[:-12]
+        finally:
+            proc.stderr.close()
+
+    stderr_thread = Thread(
+        target=read_stderr, daemon=True, name=f"cuda-stderr-{proc.pid}"
+    )
+    stderr_thread.start()
     handle = WorkerHandle(proc, output, revision=revision)
     try:
         msg = handle.wait_message(timeout=12)
@@ -286,10 +307,21 @@ def launch_cuda_worker(revision: str, device: int, mib: int) -> WorkerHandle:
                 "CUDA worker cleanup unproven; investigate child PID "
                 + str(proc.pid)
             ) from exc
+        stderr_thread.join(timeout=0.2)
+        later_messages = []
+        while len(later_messages) < 12:
+            try:
+                item = output.get_nowait()
+            except queue.Empty:
+                break
+            if item is not None:
+                later_messages.append(item)
         raise RuntimeError(
             f"CUDA child startup rejected: pid={proc.pid}, "
             f"returncode={proc.poll()}, cleanup={report.method}, "
-            f"cause={type(cause).__name__}: {cause}"
+            f"cause={type(cause).__name__}: {cause}; "
+            f"later_worker_messages={later_messages!r}; "
+            f"stderr_tail={stderr_tail!r}"
         ) from cause
 
 
