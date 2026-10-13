@@ -241,6 +241,86 @@ class LeasedHostTests(unittest.TestCase):
         self.assertTrue(old.closed)
         self.assertEqual(host.live_generations(), ())
 
+    def test_three_generations_release_each_only_after_its_last_use(self):
+        host = self.host()
+        first = host._active.plugin
+        with host.acquire() as hold_first:
+            self.assertIs(hold_first, first)
+            host.publish_ready(self.upgrade(host))
+            second = host._active.plugin
+            self.assertFalse(first.closed)
+            self.write_version("3.0.0")
+            host.publish_ready(host.prepare(host.stage()))
+            self.assertTrue(second.closed)
+            self.assertFalse(first.closed)
+            self.assertEqual(host.call("three"), "tts-3.0.0:lex-3.0.0:three")
+            self.assertIn(("research:tts@1.0.0", 1, True), host.live_generations())
+        self.assertTrue(first.closed)
+        self.assertEqual(host.live_generations(), (("research:tts@3.0.0", 0, False),))
+
+    def test_failed_disposal_is_quarantined_not_reported_as_freed(self):
+        host = self.host()
+        original = host._active.context.close
+
+        def unsafe_shutdown():
+            raise RuntimeError("simulated shutdown resource failure")
+
+        host._active.context.close = unsafe_shutdown
+        try:
+            host.publish_ready(self.upgrade(host))
+            errors = host.shutdown_errors()
+            self.assertEqual(len(errors), 1)
+            self.assertIn("simulated shutdown resource failure", errors[0][1])
+            # The generation remains owned, marked retired and disposing:
+            # it is NOT silently counted as cleanly freed.
+            self.assertIn(
+                ("research:tts@1.0.0", 0, True), host.live_generations()
+            )
+            self.assertEqual(
+                host.call("new"), "tts-2.0.0:lex-2.0.0:new"
+            )
+        finally:
+            # Do not auto-retry failed shutdown here. The original close
+            # belongs to the test fixture; use it for local test cleanup.
+            original()
+
+    def test_close_racing_with_ready_publish_rejects_new_route(self):
+        host = self.host()
+        candidate = self.upgrade(host)
+        reached = threading.Event()
+        resume = threading.Event()
+        errors = []
+        original = host._signature
+
+        def blocked_signature(entries):
+            reached.set()
+            if not resume.wait(timeout=5):
+                raise TimeoutError("publisher never resumed")
+            return original(entries)
+
+        host._signature = blocked_signature
+
+        def publish():
+            try:
+                host.publish_ready(candidate)
+            except BaseException as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=publish)
+        thread.start()
+        try:
+            self.assertTrue(reached.wait(timeout=5))
+            host.close()
+            self.assertTrue(candidate.plugin.closed)
+        finally:
+            resume.set()
+            thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], RuntimeError)
+        self.assertEqual(candidate.status, "discarded")
+        self.assertEqual(host.live_generations(), ())
+
     def test_shutdown_is_idempotent_for_retired_old_generation(self):
         host = self.host()
         old = host._active.plugin
