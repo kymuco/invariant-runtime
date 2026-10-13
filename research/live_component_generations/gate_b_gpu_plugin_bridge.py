@@ -12,6 +12,10 @@ owned_workers = []
 
 
 def start_worker(revision: str, device: int, mib: int):
+    # Independent test assertion at the actual allocation boundary, not
+    # merely a post-hoc check after both versions have been launched.
+    if not all_reaped():
+        raise RuntimeError("overlap: prior CUDA child still alive at new start")
     worker = launch_cuda_worker(revision, device, mib)
     owned_workers.append(worker)
     return worker
