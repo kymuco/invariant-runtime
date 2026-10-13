@@ -194,3 +194,27 @@ emits GATE_B3_NATIVE_GPU_SMOKE_OK with expected process and memory evidence.
 References:
 - https://github.com/python/cpython/blob/main/PC/venvlauncher.c
 - https://bugs.python.org/issue39439
+
+## Gate B.3 CLOSED — actual native Windows GPU PASS (2026-10-13)
+
+User Windows run after Windows venv redirector fix:
+
+- 13/13 CPU evidence/diagnostics unit tests PASS, 0.001 s.
+- Native GPU script emitted GATE_B3_NATIVE_GPU_SMOKE_OK and exit=0.
+- Device index 0; 12226 MiB CUDA total; 32 MiB touched allocation per worker.
+- Baseline free 6753 MiB; observed v1 global free-memory drop 172 MiB.
+- Distinct worker PIDs v1=24956, v2=3052.
+- Final free=6756 MiB, +3 MiB relative to baseline.
+- Proof scope: worker-reaped-plus-global-CUDA-memory-recovery.
+
+Interpretation: stop-first real CUDA process replacement and release
+observation PASS on this Windows machine. The 172-MiB observed delta
+includes CUDA context/allocation overhead and possibly concurrent users;
+do not attribute all 172 MiB to the 32-MiB requested buffer. Global
+memory is not reliable per-PID accounting and these are one-run observations.
+
+Gate B.3 is a RESEARCH PASS, not authorization to promote production
+plugin hot swap or claim an actual LLM model state migration. Next separate
+experiment is to link the existing RealStopFirstHost's actual
+ExecutionContext lifecycle to the owned CUDA worker with strict cleanup;
+do not duplicate schedulers or change production code.
