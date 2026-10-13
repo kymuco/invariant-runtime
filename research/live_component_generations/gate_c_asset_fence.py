@@ -9,7 +9,6 @@ No GPU memory, scheduler, catalog or worker ownership here.
 from __future__ import annotations
 
 import hashlib
-import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
