@@ -172,6 +172,10 @@ class RealStopFirstHost:
             if self._signature(discover_candidates(self.roots, self.loader)) != staged.signature:
                 raise StalePlan("source changed after exclusive stage")
             status = self._slot.snapshot()
+            if self._slot.is_closed:
+                raise RuntimeError("exclusive slot is closed")
+            if status.phase is Phase.FAILED:
+                raise RuntimeError("exclusive slot FAILED; manual recovery required")
             if status.phase is not Phase.ACTIVE or status.active != staged.base_identity:
                 raise StalePlan("active exclusive route changed since staging")
             if staged.ticket not in self._installed:
