@@ -278,5 +278,50 @@ class StopFirstTests(unittest.TestCase):
         self.assertEqual(len([x for x in self.resource.actions if x.startswith("stop:")]), 2)
 
 
+    def test_terminal_close_stops_provider_and_fences_new_activation(self) -> None:
+        self.add("a")
+        self.add("b")
+        self.slot.replace("a", "1")
+        self.slot.close()
+        self.assertEqual(self.resource.actions, ["start:a", "stop:a"])
+        self.assertIsNone(self.resource.owner)
+        self.assertEqual(self.slot.snapshot().phase, Phase.EMPTY)
+        self.assertTrue(self.slot.is_closed)
+        self.slot.close()
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.slot.replace("b", "1")
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.add("c")
+
+    def test_terminal_close_timeout_restores_prior_admission(self) -> None:
+        self.add("a")
+        self.slot.replace("a", "1")
+        with self.slot.acquire():
+            with self.assertRaises(DrainTimeout):
+                self.slot.close(drain_timeout_s=0)
+            self.assertEqual(self.slot.snapshot().phase, Phase.ACTIVE)
+            self.assertFalse(self.slot.is_closed)
+            self.assertEqual(self.resource.actions, ["start:a"])
+        with self.slot.acquire() as active:
+            self.assertEqual(active, "a")
+        self.slot.close()
+        self.assertTrue(self.slot.is_closed)
+        self.assertIsNone(self.resource.owner)
+
+    def test_terminal_close_requires_release_proof(self) -> None:
+        self.add("a", stop=lambda _: self.resource.actions.append("stop:a:unproven"))
+        self.slot.replace("a", "1")
+        with self.assertRaises(UnsafeRelease):
+            self.slot.close(release_timeout_s=0)
+        self.assertTrue(self.slot.is_closed)
+        self.assertEqual(self.slot.snapshot().phase, Phase.FAILED)
+        self.assertEqual(self.resource.owner, "a")
+        with self.assertRaises(ProviderUnavailable):
+            with self.slot.acquire():
+                pass
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            self.slot.replace("a", "1")
+
+
 if __name__ == "__main__":
     unittest.main()
