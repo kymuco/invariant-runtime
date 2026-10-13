@@ -231,18 +231,36 @@ def worker_main(revision: str, device: int, mib: int) -> int:
                 pass
 
 
+def cuda_worker_interpreter() -> tuple[str, dict[str, str] | None]:
+    """Bypass Windows venv redirector so Popen.pid is the REAL worker PID.
+
+    CPython's Windows venv python.exe is a launcher that uses CreateProcess
+    to start the base interpreter. The launcher PID is NOT os.getpid() in
+    the worker, breaking our required process-identity/teardown proof.
+    This mirrors the CPython multiprocessing spawn workaround while
+    retaining venv site-packages through __PYVENV_LAUNCHER__.
+    """
+    base = getattr(sys, "_base_executable", sys.executable)
+    if sys.platform == "win32" and base and os.path.normcase(base) != os.path.normcase(sys.executable):
+        env = os.environ.copy()
+        env["__PYVENV_LAUNCHER__"] = sys.executable
+        return base, env
+    return sys.executable, None
+
+
 def launch_cuda_worker(revision: str, device: int, mib: int) -> WorkerHandle:
     script = Path(__file__).resolve()
     # Pin exact source bytes for the duration of this launch.
     pinned = hashlib.sha256(script.read_bytes()).hexdigest()
     if hashlib.sha256(script.read_bytes()).hexdigest() != pinned:
         raise RuntimeError("CUDA worker source changed before spawn")
+    interpreter, child_env = cuda_worker_interpreter()
     proc = subprocess.Popen(
-        [sys.executable, "-u", str(script), "--worker",
+        [interpreter, "-u", str(script), "--worker",
          "--revision", revision, "--device", str(device), "--mib", str(mib)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, encoding="utf-8", text=True, bufsize=1,
-        cwd=str(script.parent),
+        cwd=str(script.parent), env=child_env,
     )
     output: queue.Queue[dict | None] = queue.Queue()
 
