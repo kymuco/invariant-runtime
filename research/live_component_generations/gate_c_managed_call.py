@@ -55,10 +55,12 @@ class ManagedCallPort:
         root_ref: str,
         is_resource_free: Callable[[], bool],
         method: str = "synthesize",
+        model_asset_paths: Callable[[str], Iterable[Path]] | None = None,
     ) -> ManagedCallPort:
         return cls(RealStopFirstHost(
             roots, root_ref=root_ref,
             is_resource_free=is_resource_free, method=method,
+            model_asset_paths=model_asset_paths,
         ))
 
     def invoke(self, text: str) -> str | bytes:
