@@ -42,8 +42,8 @@ class LeasedReadinessHost(ReadinessGatedHost):
 
     def __init__(self, roots, *, root_ref: str, method: str = "synthesize"):
         super().__init__(roots, root_ref=root_ref, method=method)
-        self._current_owner = _OwnedGeneration(self._active)
-        self._owned: set[_OwnedGeneration] = {self._current_owner}
+        initial = _OwnedGeneration(self._active)
+        self._owned: dict[int, _OwnedGeneration] = {id(self._active): initial}
         self._shutdown_errors: list[tuple[str, str]] = []
         self._failed_pending: list[PreparedRoute] = []
 
@@ -67,7 +67,7 @@ class LeasedReadinessHost(ReadinessGatedHost):
                 # Never retry shutdown or route calls through it silently.
         else:
             with self._lock:
-                self._owned.discard(owner)
+                self._owned.pop(id(owner.route), None)
 
     @contextmanager
     def acquire(self) -> Iterator[object]:
@@ -78,7 +78,8 @@ class LeasedReadinessHost(ReadinessGatedHost):
         """
         with self._lock:
             self._require_open()
-            owner = self._current_owner
+            # Resolve ownership via the ONE published _active route.
+            owner = self._owned[id(self._active)]
             owner.users += 1
         try:
             yield owner.route.plugin
@@ -121,16 +122,17 @@ class LeasedReadinessHost(ReadinessGatedHost):
                     raise StalePlan("source artifacts changed after staging")
                 if not callable(getattr(prepared.plugin, self.method, None)):
                     raise CatalogConflict("prepared instance lost its required method")
-                prior = self._current_owner
+                prior = self._owned[id(self._active)]
                 successor = PublishedRoute(
                     stage.candidate, prepared.context, prepared.plugin, stage.root_key
                 )
                 new_owner = _OwnedGeneration(successor)
-                self._owned.add(new_owner)
+                self._owned[id(successor)] = new_owner
                 self._pending.remove(prepared)
                 prepared.status = "published"
                 self._active = successor  # the ONLY published route pointer
-                self._current_owner = new_owner
+                # _active is the sole routing pointer; ownership is
+                # indexed only by the retained route identity.
                 if self._retire_locked(prior):
                     dispose_old = prior
                 view = successor.view
@@ -159,7 +161,7 @@ class LeasedReadinessHost(ReadinessGatedHost):
             for candidate in pending:
                 candidate.status = "discarded"
             self._pending.clear()
-            for owner in tuple(self._owned):
+            for owner in tuple(self._owned.values()):
                 if self._retire_locked(owner):
                     to_close.append(owner)
         for candidate in pending:
@@ -178,7 +180,7 @@ class LeasedReadinessHost(ReadinessGatedHost):
         with self._lock:
             return tuple(sorted(
                 (item.route.root_key, item.users, item.retired)
-                for item in self._owned
+                for item in self._owned.values()
             ))
 
     def shutdown_errors(self) -> tuple[tuple[str, str], ...]:
