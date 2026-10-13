@@ -30,6 +30,26 @@ from worker_supervisor import WorkerHandle
 MIB = 1024 * 1024
 
 
+def memory_drop_observed(baseline_free: int, active_free: int, allocated: int) -> bool:
+    """Require a meaningful independent physical-memory observation."""
+    if not all(isinstance(x, int) and x >= 0 for x in
+               (baseline_free, active_free, allocated)):
+        return False
+    return allocated >= 16 * MIB and baseline_free - active_free >= allocated // 2
+
+
+def memory_recovered(
+    baseline_free: int, after_free: int | None, *,
+    all_owned_workers_exited: bool, tolerance_bytes: int,
+) -> bool:
+    """Conservative global CUDA free-memory check; not per-PID VRAM proof."""
+    if not all_owned_workers_exited or not isinstance(after_free, int):
+        return False
+    if baseline_free < 0 or after_free < 0 or tolerance_bytes < 0:
+        return False
+    return after_free >= baseline_free - tolerance_bytes
+
+
 class CudaUnavailable(RuntimeError):
     pass
 
@@ -238,7 +258,10 @@ def smoke(device: int, mib: int, min_headroom_mib: int) -> None:
             if any(h.proc.poll() is None for h in handles):
                 return False
             free, _ = monitor.free_bytes()
-            return free >= baseline - tolerance
+            return memory_recovered(
+                baseline, free,
+                all_owned_workers_exited=True, tolerance_bytes=tolerance,
+            )
 
         slot = StopFirstSlot("research.cuda.real-gpu", is_resource_free=released)
 
@@ -266,7 +289,7 @@ def smoke(device: int, mib: int, min_headroom_mib: int) -> None:
                 raise RuntimeError("v1 CUDA worker RPC invalid")
             during, _ = monitor.free_bytes()
             drop = baseline - during
-            if drop < mib * MIB // 2:
+            if not memory_drop_observed(baseline, during, mib * MIB):
                 raise RuntimeError(
                     f"INCONCLUSIVE: allocated {mib} MiB in child but global "
                     f"CUDA free-memory drop was only {drop // MIB} MiB. "
