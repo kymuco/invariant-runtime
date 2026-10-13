@@ -241,7 +241,11 @@ def cuda_worker_interpreter() -> tuple[str, dict[str, str] | None]:
     retaining venv site-packages through __PYVENV_LAUNCHER__.
     """
     base = getattr(sys, "_base_executable", sys.executable)
-    if sys.platform == "win32" and base and os.path.normcase(base) != os.path.normcase(sys.executable):
+    if (
+        sys.platform == "win32"
+        and base
+        and os.path.normcase(base) != os.path.normcase(sys.executable)
+    ):
         env = os.environ.copy()
         env["__PYVENV_LAUNCHER__"] = sys.executable
         return base, env
