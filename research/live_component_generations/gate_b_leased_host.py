@@ -45,6 +45,7 @@ class LeasedReadinessHost(ReadinessGatedHost):
         self._current_owner = _OwnedGeneration(self._active)
         self._owned: set[_OwnedGeneration] = {self._current_owner}
         self._shutdown_errors: list[tuple[str, str]] = []
+        self._failed_pending: list[PreparedRoute] = []
 
     def _retire_locked(self, owner: _OwnedGeneration) -> bool:
         """Claim disposal exactly once. Caller MUST hold self._lock."""
@@ -55,13 +56,16 @@ class LeasedReadinessHost(ReadinessGatedHost):
         return False
 
     def _dispose(self, owner: _OwnedGeneration) -> None:
-        """Cleanup outside the routing lock; record failures without replay."""
+        """Close once, outside lock; quarantine failed releases without retry."""
         try:
             owner.route.context.close()
         except BaseException as exc:
             with self._lock:
                 self._shutdown_errors.append((owner.route.root_key, repr(exc)))
-        finally:
+                # Preserve ownership evidence: this generation is still
+                # tracked as retired/disposing, NOT certified released.
+                # Never retry shutdown or route calls through it silently.
+        else:
             with self._lock:
                 self._owned.discard(owner)
 
@@ -164,6 +168,8 @@ class LeasedReadinessHost(ReadinessGatedHost):
             except BaseException as exc:
                 with self._lock:
                     self._shutdown_errors.append((candidate.stage.root_key, repr(exc)))
+                    # Retain failed unpublished candidate for diagnostics.
+                    self._failed_pending.append(candidate)
         for owner in to_close:
             self._dispose(owner)
 
