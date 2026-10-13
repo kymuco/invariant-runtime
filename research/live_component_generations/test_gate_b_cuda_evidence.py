@@ -123,12 +123,13 @@ class NativeCudaEvidencePolicyTests(unittest.TestCase):
 
 
     def test_windows_venv_selects_real_python_with_venv_identity(self):
-        import os
         import sys
 
         with patch.object(sys, "platform", "win32"):
             with patch.object(sys, "executable", r"C:\venv\Scripts\python.exe"):
-                with patch.object(sys, "_base_executable", r"C:\Python\python.exe", create=True):
+                with patch.object(
+                    sys, "_base_executable", r"C:\Python\python.exe", create=True
+                ):
                     binary, env = cuda_worker_interpreter()
         self.assertEqual(binary, r"C:\Python\python.exe")
         self.assertIsNotNone(env)
