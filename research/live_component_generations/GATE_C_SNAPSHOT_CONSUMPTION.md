@@ -1,6 +1,6 @@
 # Gate C.3 — staged, bounded snapshot actually consumed by plugin
 
-**State: research implementation authored; Windows test pending.**
+**State: RESEARCH PASS — user reported Gate C.3 scoped Windows tests green on 2026-10-14.**
 `main`, `invariant/` and public `PluginService` contracts unchanged.
 
 ## Previous confirmed results
@@ -85,7 +85,8 @@ actual manifest/ExecutionContext integration cases:
 8. Repeated abandoned stage requests hit a total four-snapshot budget.
 9. Terminal close removes staged temporary snapshot files.
 
-Run CPU-only (no native GPU run needed for this gate):
+Run the same CPU-only scoped tests through compact `pytest -q`
+(no native GPU run needed for this gate):
 
 ```powershell
 Set-Location W:\dev\invariant-runtime
@@ -93,7 +94,7 @@ git pull --ff-only origin research/catalog-snapshot-gate-a-2026-10-11
 $python = '.\.venv\Scripts\python.exe'
 if (-not (Test-Path $python)) { $python = 'python' }
 
-foreach ($file in @(
+$suite = @(
     'test_gate_c_snapshot_consumption.py',
     'test_gate_c_model_assets.py',
     'test_gate_c_managed_call.py',
@@ -105,14 +106,18 @@ foreach ($file in @(
     'test_gate_a_catalog_owned_host.py',
     'test_gate_a_pinned_execution.py',
     'test_gate_a_catalog_view.py'
-)) {
-    & $python -m unittest discover -s research/live_component_generations -p $file -v
-    if ($LASTEXITCODE -ne 0) { throw "GATE_C3_FAILED: $file" }
-}
+) | ForEach-Object { Join-Path 'research/live_component_generations' $_ }
+
+& $python -m pytest -q @suite
+if ($LASTEXITCODE -ne 0) { throw 'GATE_C3_SCOPED_FAILED' }
 Write-Host 'GATE_C3_SCOPED_OK'
 ```
 
-Expected **113** methods (9 new + 104 previous), if all pass.
+Expected **113** methods (9 C.3 + 104 previous). The user previously
+reported all scoped tests green using the older verbose unittest
+commands; this pytest invocation is now preferred but has not yet been
+independently executed on the Windows host. This remains research PASS,
+not production certification.
 
 ## IMPORTANT — explicit non-goals and limits
 
