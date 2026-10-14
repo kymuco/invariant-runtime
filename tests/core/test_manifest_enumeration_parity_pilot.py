@@ -42,11 +42,20 @@ def test_enumeration_candidate_preserves_nested_manifest_sequence(
     (root / "a" / "unrelated.txt").write_text("ignored", encoding="utf-8")
     parity = pilot["_compare"]([root])
 
-    assert parity["eligible"] is True
+    # Directory enumeration order is not a cross-Python/OS guarantee.
+    # Check actual discovered membership independently of the eligibility
+    # verdict; a mere ordering difference must still make the candidate
+    # ineligible under the pilot's exact-sequence decision rule.
+    expected_paths = {str(path) for path in expected}
+    assert parity["baseline_count"] == parity["candidate_count"] == 4
+    assert set(parity["baseline_paths"]) == expected_paths
+    assert set(parity["candidate_paths"]) == expected_paths
     assert parity["same_multiset"] is True
-    assert parity["baseline_count"] == 4
-    assert set(parity["baseline_paths"]) == {str(p) for p in expected}
-    assert parity["baseline_paths"] == parity["candidate_paths"]
+    assert parity["eligible"] is (
+        parity["baseline_paths"] == parity["candidate_paths"]
+    )
+    assert parity["same_order_and_paths"] is parity["eligible"]
+    assert bool(parity["first_differences"]) is not parity["eligible"]
 
 
 def test_enumeration_candidate_preserves_duplicate_search_roots(
@@ -88,8 +97,14 @@ def test_enumeration_candidate_detects_discovery_between_runs(
     after = pilot["_compare"]([root])
 
     assert before["eligible"] is True
-    assert after["eligible"] is True
     assert set(after["baseline_paths"]) == {str(first), str(second)}
+    assert set(after["candidate_paths"]) == {str(first), str(second)}
+    assert after["same_multiset"] is True
+    # The two independent directory walks may enumerate sibling folders
+    # differently; equality is observed, never assumed for every Python.
+    assert after["eligible"] is (
+        after["baseline_paths"] == after["candidate_paths"]
+    )
 
 
 def test_enumeration_comparison_rejects_order_changes_without_mutating_tree(
@@ -185,21 +200,26 @@ def test_enumeration_candidate_records_windows_case_parity(
     manifest = _manifest(root, name="MANIFEST.JSON")
     parity = pilot["_compare"]([root])
 
-    # On the measured Windows/Python 3.11 host, rglob discovers this file
-    # but constructs a path using the lowercase search pattern. os.walk
-    # retains the actual uppercase directory-entry name. These strings
-    # differ even though both refer to the same file on this filesystem.
-    baseline = str(root / "manifest.json")
+    # Python 3.11 on the measured Windows host rewrote rglob's path
+    # spelling to the lowercase query; newer Python builds can preserve
+    # the directory-entry spelling. Both behaviors are valid observations
+    # of the baseline; neither is evidence to change production discovery.
+    assert parity["baseline_count"] == parity["candidate_count"] == 1
+    baseline = parity["baseline_paths"][0]
+    candidate = parity["candidate_paths"][0]
+    assert candidate == str(manifest)
     assert Path(baseline).samefile(manifest)
-    assert parity["baseline_count"] == 1
-    assert parity["candidate_count"] == 1
-    assert parity["eligible"] is False
-    assert parity["same_multiset"] is False
-    assert parity["baseline_paths"] == [baseline]
-    assert parity["candidate_paths"] == [str(manifest)]
-    assert parity["first_differences"] == [
-        {"position": 0, "baseline": baseline, "candidate": str(manifest)}
-    ]
+    assert Path(candidate).samefile(manifest)
+
+    expected_equal = baseline == candidate
+    assert parity["eligible"] is expected_equal
+    assert parity["same_order_and_paths"] is expected_equal
+    assert parity["same_multiset"] is expected_equal
+    assert parity["first_differences"] == (
+        [] if expected_equal else [
+            {"position": 0, "baseline": baseline, "candidate": candidate}
+        ]
+    )
 
 
 @pytest.mark.parametrize("count", [0, 4, 121])
