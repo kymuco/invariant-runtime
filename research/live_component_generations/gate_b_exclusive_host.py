@@ -115,9 +115,20 @@ class RealStopFirstHost:
             identity = self._install(initial, root, "initial")
             self._slot.replace(*identity)
         except BaseException:
-            self._close_model_bundles()
-            if self._snapshot_vault is not None:
-                self._snapshot_vault.close()
+            # Initial candidate may have failed after acquiring resources.
+            # Never discard pinned bytes/handles solely because construction
+            # threw: retain them if release cannot be independently proved.
+            try:
+                safely_empty = (
+                    self._slot.snapshot().phase is Phase.EMPTY
+                    and is_resource_free()
+                )
+            except BaseException:
+                safely_empty = False
+            if safely_empty:
+                self._close_model_bundles()
+                if self._snapshot_vault is not None:
+                    self._snapshot_vault.close()
             raise
 
     @staticmethod
