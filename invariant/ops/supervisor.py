@@ -10,7 +10,7 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any
+from typing import Any, Callable
 
 from invariant.api.service import PluginService
 from invariant.exec.runtime.execution_context import ExecutionContext
@@ -38,6 +38,7 @@ class ExecutionState(Enum):
 
 
 class CloseReason(Enum):
+    HOST_SHUTDOWN = auto()
     USER_COMMIT = auto()
     USER_ROLLBACK = auto()
     TTL_EXPIRED = auto()
@@ -144,6 +145,9 @@ class ExecutionSupervisor:
         self._next_cleanup_at = time.monotonic() + self._cleanup_interval
 
         self._lock = threading.RLock()
+        self._closed = False
+        self._pending_contexts = 0
+        self._on_drained: Callable[[], None] | None = None
         self._timeout_pool: concurrent.futures.ThreadPoolExecutor | None = None
         try:
             self._plugin_get_timeout_s = float(os.environ.get("INVARIANT_PLUGIN_GET_TIMEOUT_S", "300"))
@@ -163,29 +167,80 @@ class ExecutionSupervisor:
             self._plugin_get_timeout_s if self._plugin_get_timeout_s > 0 else None,
         )
 
-    def close(self) -> None:
-        p = self._timeout_pool
-        self._timeout_pool = None
+    def close(self, *, on_drained: Callable[[], None] | None = None) -> None:
+        """Stop admission and close all owned executions, without waiting.
+
+        Any context with running plugin work is finalized by the existing
+        in-flight fence. Notify the host when the last ctx.close() returns.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._on_drained = on_drained
+            execution_ids = tuple(self._executions)
+
+        for execution_id in execution_ids:
+            self._close_execution(
+                execution_id=execution_id,
+                reason=CloseReason.HOST_SHUTDOWN,
+            )
+
+        with self._lock:
+            p = self._timeout_pool
+            self._timeout_pool = None
         if p is not None:
             try:
                 p.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 p.shutdown(wait=False)
             except Exception:
-                pass
+                log.exception("Failed to stop plugin-get timeout executor")
+
+        self._notify_drained_if_ready()
+
+    def _notify_drained_if_ready(self) -> None:
+        callback = None
+        with self._lock:
+            if (
+                self._closed
+                and self._pending_contexts == 0
+                and self._on_drained is not None
+            ):
+                callback, self._on_drained = self._on_drained, None
+        if callback is not None:
+            try:
+                callback()
+            except Exception:
+                log.exception("Failed to close service after execution drain")
+
+    def _finalize_context(self, session: ExecutionSession) -> None:
+        try:
+            session.ctx.close()
+        except Exception:
+            log.exception(
+                "Failed to close execution context %s", session.execution_id
+            )
+        finally:
+            with self._lock:
+                self._pending_contexts -= 1
+            self._notify_drained_if_ready()
 
     def _get_timeout_pool(self) -> concurrent.futures.ThreadPoolExecutor:
-        p = self._timeout_pool
-        if p is not None:
-            return p
-        # Only used for timeout-enabled calls. Keep it bounded.
-        cpu = os.cpu_count() or 4
-        workers = max(4, min(32, cpu * 4))
-        self._timeout_pool = concurrent.futures.ThreadPoolExecutor(
-            max_workers=workers,
-            thread_name_prefix="invariant-timeout",
-        )
-        return self._timeout_pool
+        with self._lock:
+            if self._closed:
+                raise ExecutionStateError("ExecutionSupervisor is closed")
+            p = self._timeout_pool
+            if p is not None:
+                return p
+            # Only used for timeout-enabled calls. Keep it bounded.
+            cpu = os.cpu_count() or 4
+            workers = max(4, min(32, cpu * 4))
+            self._timeout_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix="invariant-timeout",
+            )
+            return self._timeout_pool
 
     # ---------------- internal helpers ----------------
 
@@ -268,10 +323,7 @@ class ExecutionSupervisor:
                 should_finalize_now = True
 
         if should_finalize_now:
-            try:
-                session.ctx.close()
-            except Exception:
-                pass
+            self._finalize_context(session)
 
         # Tracing (best-effort)
         if tracer and hasattr(tracer, "note_execution_closed"):
@@ -350,6 +402,8 @@ class ExecutionSupervisor:
         self.cleanup_expired()
         
         with self._lock:
+            if self._closed:
+                raise ExecutionStateError("ExecutionSupervisor is closed")
             self._enforce_limits()
             execution_id = str(uuid.uuid4())
 
@@ -370,9 +424,12 @@ class ExecutionSupervisor:
 
         try:
             with self._lock:
-                # Re-check limits right before insert (race-safe).
+                # Re-check admission and limits right before insert.
+                if self._closed:
+                    raise ExecutionStateError("ExecutionSupervisor is closed")
                 self._enforce_limits()
                 self._executions[execution_id] = session
+                self._pending_contexts += 1
 
         except Exception:
             # Context must not leak if we fail to insert.
@@ -520,10 +577,7 @@ class ExecutionSupervisor:
                     session._finalized = True
                     finalize = True
             if finalize:
-                try:
-                    session.ctx.close()
-                except Exception:
-                    pass
+                self._finalize_context(session)
 
         def _load_plugin():
             with bind_execution(execution_id):
@@ -651,10 +705,7 @@ class ExecutionSupervisor:
                     session._finalized = True
                     finalize = True
             if finalize:
-                try:
-                    session.ctx.close()
-                except Exception:
-                    pass
+                self._finalize_context(session)
 
         # Normalize timeout once; avoid recursion.
         effective_timeout: float | None = None
