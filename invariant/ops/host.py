@@ -36,6 +36,8 @@ class RuntimeHost:
         policy_profile: str | None = None,
     ):
         self._service = plugin_service
+        self._close_lock = threading.Lock()
+        self._closed = False
         self._supervisor = ExecutionSupervisor(
             plugin_service,
             max_active_executions=max_active_executions,
@@ -91,34 +93,33 @@ class RuntimeHost:
         )
 
     def close(self) -> None:
-        """Gracefully stop background maintenance."""
+        """Stop new execution admission; release owned contexts safely.
+
+        Return without waiting for stuck plugin calls. The supervisor's
+        existing in-flight fence finalizes contexts after the last call,
+        then invokes the service close callback exactly once.
+        """
+        with self._close_lock:
+            if self._closed:
+                return
+            self._closed = True
+
         try:
             self._watchdog.stop()
         except Exception:
-            pass
+            log.exception("Failed to stop RuntimeHost watchdog")
         try:
-            close_sup = getattr(self._supervisor, "close", None)
-            if callable(close_sup):
-                close_sup()
+            self._supervisor.close(on_drained=self._service.close)
         except Exception:
-            pass
+            log.exception("Failed to close RuntimeHost supervisor")
         try:
-            # We do not wait: hanging plugin calls must not block shutdown.
-            self._call_pool.shutdown(wait=False, cancel_futures=True)  # py3.9+
+            # Do not wait for in-progress plugin calls. The supervisor's
+            # context fence, not the thread pool, controls resource release.
+            self._call_pool.shutdown(wait=False, cancel_futures=True)
         except TypeError:
-            # older python: no cancel_futures
-            try:
-                self._call_pool.shutdown(wait=False)
-            except Exception:
-                pass
+            self._call_pool.shutdown(wait=False)
         except Exception:
-            pass
-        try:
-            close_fn = getattr(self._service, "close", None)
-            if callable(close_fn):
-                close_fn()
-        except Exception:
-            pass
+            log.exception("Failed to stop RuntimeHost call executor")
 
     def metrics(self):
         tracer = getattr(self._service, "tracer", None)
@@ -126,6 +127,8 @@ class RuntimeHost:
 
     def _safe_tick(self) -> None:
         # Runs in background thread; must be exception-free.
+        if self._closed:
+            return
         try:
             self._supervisor.tick()
         except Exception:
@@ -138,6 +141,12 @@ class RuntimeHost:
             pass
 
     def handle(self, command: dict[str, Any]) -> dict[str, Any]:
+        if self._closed:
+            return {
+                "ok": False,
+                "error": "closed",
+                "message": "RuntimeHost is closed",
+            }
         # periodic maintenance (never raises)
         tick_cleaned = 0
         try:
