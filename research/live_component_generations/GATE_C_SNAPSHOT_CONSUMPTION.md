@@ -26,6 +26,7 @@ existing Invariant mechanisms, without another routing authority:
    verified file into a private temporary vault (NO hardlinks). It checks
    the copied digest and original again. A 16 MiB/default file limit
    prevents accidentally copying large models; maximum accepted is 64 MiB.
+   A separate four-snapshot cap also limits cumulative abandoned stages.
 4. Before draining the running plugin, validate original C.2 seal AND
    staged snapshot digest. If either differs, keep the old route ACTIVE.
 5. After old worker exits and host proves resource release, validate
@@ -70,7 +71,7 @@ def initialize(self, config):
 
 ## Test plan
 
-`test_gate_c_snapshot_consumption.py` contains **8** new CPU-only,
+`test_gate_c_snapshot_consumption.py` contains **9** new CPU-only,
 actual manifest/ExecutionContext integration cases:
 
 1. ManagedCallPort receives correct v1 and v2 outputs from snapshots.
@@ -81,7 +82,8 @@ actual manifest/ExecutionContext integration cases:
 5. Candidate exceeds explicit copy budget -> reject before v1 shutdown.
 6. Candidate source mutated after stage -> C.2 rejects before drain.
 7. Multi-file/sharded model cannot silently pass as a complete copy.
-8. Terminal close removes staged temporary snapshot files.
+8. Repeated abandoned stage requests hit a total four-snapshot budget.
+9. Terminal close removes staged temporary snapshot files.
 
 Run CPU-only (no native GPU run needed for this gate):
 
@@ -110,7 +112,7 @@ foreach ($file in @(
 Write-Host 'GATE_C3_SCOPED_OK'
 ```
 
-Expected **112** methods (8 new + 104 previous), if all pass.
+Expected **113** methods (9 new + 104 previous), if all pass.
 
 ## IMPORTANT — explicit non-goals and limits
 
