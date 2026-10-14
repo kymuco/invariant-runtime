@@ -158,6 +158,40 @@ def test_enumeration_comparison_reports_unpaired_candidate_path(
     }
 
 
+def test_enumeration_comparison_rejects_path_spelling_drift_for_same_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pilot = _pilot()
+    root = tmp_path / "pack"
+    manifest = _manifest(root / "nested")
+
+    # Both spellings address the identical file on all supported OSes, but
+    # the exact path-string sequence contract must report them as unequal.
+    alias = manifest.parent / ".." / manifest.parent.name / manifest.name
+    assert alias.samefile(manifest)
+    assert str(alias) != str(manifest)
+
+    monkeypatch.setitem(
+        pilot["_compare"].__globals__,
+        "_candidate",
+        lambda roots: [alias],
+    )
+    parity = pilot["_compare"]([root])
+
+    assert parity["baseline_count"] == parity["candidate_count"] == 1
+    assert parity["eligible"] is False
+    assert parity["same_order_and_paths"] is False
+    assert parity["same_multiset"] is False
+    assert parity["first_differences"] == [
+        {
+            "position": 0,
+            "baseline": str(manifest),
+            "candidate": str(alias),
+        }
+    ]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="NTFS junction-specific")
 def test_enumeration_candidate_records_windows_junction_parity(
     tmp_path: Path,
