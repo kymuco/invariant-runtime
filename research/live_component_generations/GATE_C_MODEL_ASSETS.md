@@ -1,6 +1,6 @@
 # Gate C.2 — model asset integrity before exclusive hot-swap
 
-**Status:** authored research experiment; user Windows check **PENDING**.
+**Status:** research PASS — 104/104 scoped tests reported green on user Windows (2026-10-14).
 All changes are under research/live_component_generations/. No main, public
 PluginService, production loader or kernel edits.
 
@@ -129,3 +129,12 @@ zero-cost. A robust production design should use immutable/versioned
 content-addressed artifacts or explicit model-loader file-handle pinning.
 
 Do NOT treat a C.2 PASS as a general hot-swap/LLM production GO.
+
+
+## Windows completion evidence (2026-10-14)
+
+User reported all scoped C.2 checks green. The suite expected 104 methods:
+8 new SHA256 model-asset tests and 96 prior Gate C.1 / B / A methods.
+This closes Gate C.2 as research PASS, not immutable model loading or
+production approval. Gate C.3 separately tests the real plugin consuming
+a pre-copied, bounded snapshot via existing Invariant config injection.
