@@ -121,6 +121,9 @@ def test_successful_get_releases_its_lease_before_explicit_rollback():
     ctx = _BlockingContext()
     ctx.release.set()
     host = _host(ctx)
+    # Also cover the synchronous non-watchdog path, where the caller
+    # rather than a future-completion callback must release the fence.
+    host._supervisor._plugin_get_timeout_s = 0
     execution_id = _created(host)
     try:
         out = host.handle(
