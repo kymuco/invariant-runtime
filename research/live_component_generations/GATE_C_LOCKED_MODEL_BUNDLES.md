@@ -87,7 +87,7 @@ demonstrative contracts, not a current public PluginService API.
 
 ## Native Windows CPU gate
 
-12 new tests in `test_gate_c_locked_assets.py`, of which 11 require
+13 new tests in `test_gate_c_locked_assets.py`, of which 11 require
 Windows native file-sharing support (the remainder confirms failure on
 unsupported OS). The tests use REAL manifest-backed Invariant plugins
 but small synthetic model shards, not a downloaded LLM.
@@ -107,7 +107,7 @@ if ($LASTEXITCODE -ne 0) { throw "GATE_C4_PYTEST_FAILED" }
 Write-Host "GATE_C4_SCOPED_OK"
 ```
 
-Expected focused results: **39 tests** (12 C.4 + 9 C.3 + 8 C.2 +
+Expected focused results: **40 tests** (13 C.4 + 9 C.3 + 8 C.2 +
 10 C.1). A Windows-skip in a native lock test is NOT evidence of
 Windows share-mode behavior. Do not claim native C.4 PASS without
 actual Windows tests and exit status 0.
