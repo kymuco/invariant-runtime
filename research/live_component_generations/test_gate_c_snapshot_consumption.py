@@ -178,6 +178,16 @@ class ModelSnapshotConsumptionTests(unittest.TestCase):
             host.stage()
         self.assertEqual(host.call("safe"), "1.0.0:original-v1:safe")
 
+    def test_repeated_stage_copies_have_a_small_total_budget(self):
+        host = self.host()
+        self.write_version("2.0.0", "candidate")
+        # Initial v1 snapshot consumes one of four available slots.
+        for _ in range(3):
+            host.stage()
+        with self.assertRaisesRegex(StalePlan, "snapshot budget exhausted"):
+            host.stage()
+        self.assertEqual(host.call("safe"), "1.0.0:original-v1:safe")
+
     def test_terminal_close_deletes_private_model_copy(self):
         host = self.host()
         with host._slot.acquire() as active:
