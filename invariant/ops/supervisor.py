@@ -783,9 +783,16 @@ class ExecutionSupervisor:
                         metrics.plugin_call_duration_seconds.observe(call_label, dt)
                     except Exception:
                         pass
-                _after_call()
 
-        fut = pool.submit(_run)
+        # A pool shutdown may cancel a QUEUED _run before its finally
+        # block can execute. Completion callbacks also run for cancelled
+        # futures, so the existing execution fence is always released.
+        try:
+            fut = pool.submit(_run)
+        except BaseException:
+            _after_call()
+            raise
+        fut.add_done_callback(lambda _done: _after_call())
         try:
             return fut.result(timeout=float(timeout_v))
         except concurrent.futures.TimeoutError as err:
