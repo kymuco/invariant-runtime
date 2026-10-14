@@ -58,6 +58,7 @@ class ManagedCallPort:
         model_asset_paths: Callable[[str], Iterable[Path]] | None = None,
         snapshot_config_prefix: str | None = None,
         snapshot_max_file_bytes: int = 16 * 1024 * 1024,
+        locked_model_config_prefix: str | None = None,
     ) -> ManagedCallPort:
         return cls(RealStopFirstHost(
             roots, root_ref=root_ref,
@@ -65,6 +66,7 @@ class ManagedCallPort:
             model_asset_paths=model_asset_paths,
             snapshot_config_prefix=snapshot_config_prefix,
             snapshot_max_file_bytes=snapshot_max_file_bytes,
+            locked_model_config_prefix=locked_model_config_prefix,
         ))
 
     def invoke(self, text: str) -> str | bytes:
