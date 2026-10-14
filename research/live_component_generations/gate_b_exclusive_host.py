@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
 from uuid import uuid4
 
 from catalog_epoch import CatalogConflict, CatalogEpochs, StalePlan
@@ -61,6 +61,7 @@ class RealStopFirstHost:
         snapshot_config_prefix: str | None = None,
         snapshot_max_file_bytes: int = 16 * 1024 * 1024,
         locked_model_config_prefix: str | None = None,
+        trusted_model_sha256: Callable[[str], Mapping[str, str]] | None = None,
     ):
         if not root_ref or "@" in root_ref:
             raise ValueError("root_ref must be an unversioned plugin identifier")
@@ -90,9 +91,13 @@ class RealStopFirstHost:
                 )
             if not locked_model_config_prefix.endswith("."):
                 raise ValueError("locked_model_config_prefix must end with '.'")
+            if not callable(trusted_model_sha256):
+                raise ValueError("C.4 requires trusted_model_sha256 for each version")
+        elif trusted_model_sha256 is not None:
+            raise ValueError("trusted_model_sha256 only applies to C.4 no-copy mode")
         self._locked_prefix = locked_model_config_prefix
         self._locked_guard = (
-            NoCopyModelGuard(self._asset_fence)
+            NoCopyModelGuard(self._asset_fence, trusted_model_sha256)
             if locked_model_config_prefix is not None else None
         )
         self._locked_bundles: dict[str, LockedBundle] = {}
