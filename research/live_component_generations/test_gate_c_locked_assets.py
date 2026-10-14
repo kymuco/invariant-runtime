@@ -235,6 +235,30 @@ class LockedModelAssetsTests(unittest.TestCase):
         self.assertEqual(host.call("still"), "1.0.0:v1/0|v1/1|v1/2:still")
 
     @unittest.skipUnless(sys.platform == "win32", "Windows file shares only")
+    def test_uncertain_resource_release_keeps_model_leases_fenced(self):
+        from stop_first import Phase, UnsafeRelease
+
+        release_allowed = {"value": True}
+        host = RealStopFirstHost(
+            [self.root], root_ref="research:tts",
+            is_resource_free=(
+                lambda: not self.claim.exists() and release_allowed["value"]
+            ),
+            model_asset_paths=self.assets,
+            locked_model_config_prefix=self.PREFIX,
+            trusted_model_sha256=self.trusted_sha256,
+        )
+        self.hosts.append(host)
+        self.write_version("2.0.0", "candidate")
+        stage = host.stage()
+        release_allowed["value"] = False
+        with self.assertRaises(UnsafeRelease):
+            host.replace(stage, release_timeout_s=0)
+        self.assertEqual(host.status().phase, Phase.FAILED)
+        self.assertTrue(host._locked_bundles)
+        self.assertTrue(all(not b.closed for b in host._locked_bundles.values()))
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows file shares only")
     def test_fail_closed_if_bundle_spans_multiple_directories(self):
         host = self.host()
         files = self.write_version("2.0.0", "new")
