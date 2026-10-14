@@ -36,6 +36,10 @@ class SnapshotVault:
         if not 1 <= max_file_bytes <= 64 * MIB:
             raise ValueError("C.3 snapshot file limit must be 1..64 MiB")
         self.max_file_bytes = max_file_bytes
+        # C.3 is a tiny fixture, not a persistent content-addressed store.
+        # Bound repeated staged-but-abandoned candidate copies too.
+        self._max_snapshots = 4
+        self._snapshots_created = 0
         self._temp = tempfile.TemporaryDirectory(prefix="invariant-c3-")
         self._closed = False
 
@@ -60,6 +64,8 @@ class SnapshotVault:
     def create(self, seal: AssetSeal) -> Snapshot:
         if self._closed:
             raise RuntimeError("snapshot vault is closed")
+        if self._snapshots_created >= self._max_snapshots:
+            raise StalePlan("C.3 staged snapshot budget exhausted")
         if len(seal.files) != 1:
             raise StalePlan(
                 "C.3 explicitly supports one model artifact per root; "
@@ -99,6 +105,7 @@ class SnapshotVault:
                 size=size, sha256=h.hexdigest(), root_key=seal.root_key,
             )
             self.verify(snap)
+            self._snapshots_created += 1
             return snap
         except BaseException:
             try:
