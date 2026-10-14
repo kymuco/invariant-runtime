@@ -23,7 +23,7 @@ from gate_a_catalog_view import CatalogView
 from gate_a_pinned_execution import open_pinned_execution
 from gate_a_readiness_host import PublishedRoute
 from gate_c_asset_fence import AssetFence, AssetSeal
-from gate_c_snapshot_vault import Snapshot, SnapshotVault
+from gate_c_snapshot_vault import Snapshot as AssetSnapshot, SnapshotVault
 from prototype import ProviderSpec, ProviderUnavailable
 from stop_first import Phase, Snapshot, StopFirstSlot
 
@@ -37,7 +37,7 @@ class ExclusiveStage:
     signature: tuple[tuple[str, str, tuple[str, ...]], ...]
     ticket: str
     asset_seal: AssetSeal | None = None
-    asset_snapshot: Snapshot | None = None
+    asset_snapshot: AssetSnapshot | None = None
 
 
 class RealStopFirstHost:
@@ -101,7 +101,7 @@ class RealStopFirstHost:
     def _install(
         self, view: CatalogView, root_key: str, ticket: str,
         *, asset_seal: AssetSeal | None = None,
-        asset_snapshot: Snapshot | None = None,
+        asset_snapshot: AssetSnapshot | None = None,
     ):
         # A selected candidate's asset seal belongs to the generation
         # starter. A rollback re-verifies the original version's seal.
@@ -142,7 +142,7 @@ class RealStopFirstHost:
     def _start(
         self, view: CatalogView, root_key: str,
         asset_seal: AssetSeal | None = None,
-        asset_snapshot: Snapshot | None = None,
+        asset_snapshot: AssetSnapshot | None = None,
     ):
         # Called ONLY after stop-first has verified is_resource_free().
         # Revalidate just before opening the real ExecutionContext; the
