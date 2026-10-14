@@ -38,12 +38,12 @@ class ExecutionState(Enum):
 
 
 class CloseReason(Enum):
-    HOST_SHUTDOWN = auto()
     USER_COMMIT = auto()
     USER_ROLLBACK = auto()
     TTL_EXPIRED = auto()
     FAILED = auto()
     LIMIT_ENFORCED = auto()
+    HOST_SHUTDOWN = auto()
 
 
 @dataclass
