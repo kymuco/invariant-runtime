@@ -1,6 +1,6 @@
 # Gate C.4 — pinned no-copy model bundles (Windows research)
 
-**Status: authored, NATIVE WINDOWS CHECK PENDING.** No production or main
+**Status: research PASS — user reported all 41 focused C.1–C.4 pytest checks green on Windows (2026-10-14).** No production or main
 changes. This is an opt-in extension of the existing C.1
 `ManagedCallPort → RealStopFirstHost → ExecutionContext` route, not a
 second router, scheduler, worker supervisor or model cache.
@@ -140,3 +140,21 @@ Additional negative proof: after a failed resource-release predicate the
 slot must remain FAILED, and the model file leases must remain held for
 host-controlled manual recovery rather than being freed when the stop
 attempt returns. The last test exercises this explicitly.
+
+
+## Native Windows completion — 2026-10-14
+
+The user reports the entire Gate C.4 focused pytest run green on Windows:
+14 new C.4 checks and 27 C.1–C.3 scoped regression checks, **41 total**.
+This is user-reported Windows execution evidence, not a GitHub Actions or
+assistant-local run. The tests validate Win32 CreateFileW read-sharing,
+write/delete denial, multi-file real Invariant plugin invocation and
+replacement, trusted per-version SHA-256, no-copy staging, staged-handle
+resource bounds, and retaining file handles on failed release evidence.
+
+**Research Gate C.4 = PASS. Production readiness = NO-GO.** A real
+model-loader, real large/multi-shard weights, process/OS crash recovery,
+adversarial concurrent writers and GPU allocation behavior are not yet
+established by this CPU-only suite. Next distinct work item is a model-loader
+E2E that consumes the already-verified pinned paths without adding another
+scheduler or a second catalog authority.
