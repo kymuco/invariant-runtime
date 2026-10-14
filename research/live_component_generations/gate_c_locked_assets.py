@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import ctypes
 import json
-import os
+import re
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -115,8 +116,34 @@ class LockedBundle:
 class NoCopyModelGuard:
     """Host-controlled discovery + SHA256 + Windows handle ownership."""
 
-    def __init__(self, fence: AssetFence):
+    def __init__(
+        self, fence: AssetFence,
+        trusted_sha256: Callable[[str], Mapping[str, str]],
+    ):
+        if not callable(trusted_sha256):
+            raise TypeError("C.4 requires externally trusted per-version hashes")
         self.fence = fence
+        self._trusted_sha256 = trusted_sha256
+
+    def _check_trusted(self, seal: AssetSeal) -> None:
+        try:
+            trusted = dict(self._trusted_sha256(seal.root_key))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise StalePlan("trusted model digest inventory unavailable") from exc
+        observed = {entry.path.name: entry.sha256 for entry in seal.files}
+        if (
+            set(trusted) != set(observed)
+            or any(
+                not isinstance(digest, str)
+                or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                for digest in trusted.values()
+            )
+            or observed != trusted
+        ):
+            raise StalePlan(
+                f"model asset bytes or file inventory differ from trusted "
+                f"version pins: {seal.root_key}"
+            )
 
     @staticmethod
     def _validate(seal: AssetSeal) -> None:
@@ -141,6 +168,7 @@ class NoCopyModelGuard:
         if sys.platform != "win32":
             raise RuntimeError("Gate C.4 currently supports Windows only")
         self._validate(seal)
+        self._check_trusted(seal)
         handles = []
         try:
             for item in seal.files:
@@ -158,4 +186,5 @@ class NoCopyModelGuard:
         if bundle.closed:
             raise StalePlan("model bundle lease is closed")
         self._validate(bundle.seal)
+        self._check_trusted(bundle.seal)
         self.fence.verify(bundle.seal)
