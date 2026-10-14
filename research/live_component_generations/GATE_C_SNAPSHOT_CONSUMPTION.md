@@ -140,3 +140,26 @@ not production certification.
   files or a dedicated content-addressed store with read-only model access
   and atomic multi-file publication. This experiment defines what to
   enforce, not a production implementation of that store.
+
+
+## Additional Windows pytest confirmation (2026-10-14)
+
+User additionally ran the corrected active-environment invocation through
+`Get-Command python` rather than assuming `.venv/Scripts/python.exe` exists.
+The three focused Gate C test files (C.3 snapshot consumption, C.2 model
+assets and C.1 managed call) were reported **all green** under `pytest -q`.
+Expected focused count: 9 + 8 + 10 = **27** methods. The user reported
+green status, not a copied pytest summary line with counts. Previous broader
+113-method Windows scoped regression was separately reported green using
+verbose unittest; this new run confirms the focused pytest workflow.
+
+Future Windows commands should resolve the ACTIVE Python interpreter:
+
+```powershell
+$python = (Get-Command python -ErrorAction Stop).Source
+& $python -m pytest -q research/live_component_generations/test_gate_c_snapshot_consumption.py research/live_component_generations/test_gate_c_model_assets.py research/live_component_generations/test_gate_c_managed_call.py
+if ($LASTEXITCODE -ne 0) { throw 'GATE_C3_PYTEST_FAILED' }
+```
+
+Do not interpret a stale `$LASTEXITCODE` after a PowerShell command-not-found
+failure as a test result. No production GPU/LLM integration is implied.
