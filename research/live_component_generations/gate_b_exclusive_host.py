@@ -362,9 +362,16 @@ class RealStopFirstHost:
                 release_timeout_s=release_timeout_s,
             )
             # Only dispose on fully successful terminal resource release.
-            if self._slot.is_closed and self._snapshot_vault is not None:
+            # Closing the slot flag alone is insufficient: a terminal
+            # FAILED resource fence is not proof that worker-owned files
+            # and model bytes are safe to release. Only EMPTY is certified.
+            safely_closed = (
+                self._slot.is_closed
+                and self._slot.snapshot().phase is Phase.EMPTY
+            )
+            if safely_closed and self._snapshot_vault is not None:
                 self._snapshot_vault.close()
-            if self._slot.is_closed and self._locked_guard is not None:
+            if safely_closed and self._locked_guard is not None:
                 self._close_model_bundles()
 
     def __enter__(self):
