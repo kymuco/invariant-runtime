@@ -56,11 +56,15 @@ class ManagedCallPort:
         is_resource_free: Callable[[], bool],
         method: str = "synthesize",
         model_asset_paths: Callable[[str], Iterable[Path]] | None = None,
+        snapshot_config_prefix: str | None = None,
+        snapshot_max_file_bytes: int = 16 * 1024 * 1024,
     ) -> ManagedCallPort:
         return cls(RealStopFirstHost(
             roots, root_ref=root_ref,
             is_resource_free=is_resource_free, method=method,
             model_asset_paths=model_asset_paths,
+            snapshot_config_prefix=snapshot_config_prefix,
+            snapshot_max_file_bytes=snapshot_max_file_bytes,
         ))
 
     def invoke(self, text: str) -> str | bytes:
