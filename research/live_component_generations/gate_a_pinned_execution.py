@@ -65,7 +65,10 @@ class _PinnedService:
     tracer: object
 
 
-def open_pinned_execution(service: object, view: CatalogView):
+def open_pinned_execution(
+    service: object, view: CatalogView, *,
+    config: dict[str, object] | None = None,
+):
     """Open a real ephemeral ExecutionContext bound to exactly one view.
 
     All normal activation lookups, including ActivationTransaction injection,
@@ -92,4 +95,9 @@ def open_pinned_execution(service: object, view: CatalogView):
         loader=service.loader,
         tracer=getattr(service, "tracer", None),
     )
-    return ExecutionContext(plugin_service=bound, policy=EphemeralPolicy())
+    # Research-only host-provided configuration uses Invariant's EXISTING
+    # policy-gated config source and manifest runtime.config_prefix injection.
+    # It does not grant new capabilities or change dependency policy.
+    return ExecutionContext(
+        plugin_service=bound, policy=EphemeralPolicy(config=config)
+    )
