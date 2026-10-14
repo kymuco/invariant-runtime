@@ -6,6 +6,7 @@ other platforms. One cross-platform test proves unsupported OS fails closed.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -28,6 +29,7 @@ class LockedModelAssetsTests(unittest.TestCase):
         self.root = Path(t.name)
         self.claim = self.root / "one-gpu.claim"
         self.paths: dict[str, tuple[Path, ...]] = {}
+        self.trusted: dict[str, dict[str, str]] = {}
         self.hosts = []
         self.addCleanup(self.cleanup)
         self.write_version("1.0.0", "v1")
@@ -52,6 +54,9 @@ class LockedModelAssetsTests(unittest.TestCase):
         for index, path in enumerate(files):
             path.write_text(f"{text}/{index}", encoding="utf-8")
         self.paths["research:tts@" + version] = files
+        self.trusted["research:tts@" + version] = {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in files
+        }
 
         source = (
             "from invariant.spec import BasePlugin\n"
@@ -94,12 +99,16 @@ class LockedModelAssetsTests(unittest.TestCase):
     def assets(self, root_key):
         return self.paths[root_key]
 
+    def trusted_sha256(self, root_key):
+        return self.trusted[root_key]
+
     def host(self):
         host = RealStopFirstHost(
             [self.root], root_ref="research:tts",
             is_resource_free=lambda: not self.claim.exists(),
             model_asset_paths=self.assets,
             locked_model_config_prefix=self.PREFIX,
+            trusted_model_sha256=self.trusted_sha256,
         )
         self.hosts.append(host)
         return host
@@ -111,6 +120,7 @@ class LockedModelAssetsTests(unittest.TestCase):
             is_resource_free=lambda: not self.claim.exists(),
             model_asset_paths=self.assets,
             locked_model_config_prefix=self.PREFIX,
+            trusted_model_sha256=self.trusted_sha256,
         )
         self.hosts.append(port)
         self.assertEqual(port.invoke("old"), "1.0.0:v1/0|v1/1|v1/2:old")
@@ -191,11 +201,23 @@ class LockedModelAssetsTests(unittest.TestCase):
         self.assertEqual(host.call("still"), "1.0.0:v1/0|v1/1|v1/2:still")
 
     @unittest.skipUnless(sys.platform == "win32", "Windows file shares only")
+    def test_modified_shard_before_stage_rejected_against_trusted_pins(self):
+        host = self.host()
+        files = self.write_version("2.0.0", "new")
+        files[0].write_text("evil", encoding="utf-8")
+        with self.assertRaisesRegex(StalePlan, "differ from trusted"):
+            host.stage()
+        self.assertEqual(host.call("old"), "1.0.0:v1/0|v1/1|v1/2:old")
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows file shares only")
     def test_large_sparse_weight_does_not_trigger_any_snapshot_copy(self):
         host = self.host()
         files = self.write_version("2.0.0", "new")
         with files[0].open("r+b") as stream:
             stream.truncate(20 * 1024 * 1024)  # greater than C.3 16 MiB default
+        self.trusted["research:tts@2.0.0"][files[0].name] = (
+            hashlib.sha256(files[0].read_bytes()).hexdigest()
+        )
         staged = host.stage()
         self.assertEqual(staged.locked_bundle.seal.files[0].size, 20 * 1024 * 1024)
         self.assertFalse(hasattr(host, "_models_copied"))
@@ -227,7 +249,7 @@ class LockedModelAssetsTests(unittest.TestCase):
         if sys.platform == "win32":
             self.skipTest("Windows covered by native lock tests above")
         seal = AssetFence(self.assets).pin("research:tts@1.0.0")
-        guard = NoCopyModelGuard(AssetFence(self.assets))
+        guard = NoCopyModelGuard(AssetFence(self.assets), self.trusted_sha256)
         with self.assertRaisesRegex(RuntimeError, "Windows only"):
             guard.acquire(seal)
 
