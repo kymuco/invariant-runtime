@@ -12,7 +12,7 @@ sandbox, a capability-granting policy or a general-purpose RPC protocol.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
 
 from gate_b_exclusive_host import RealStopFirstHost
 from gate_b_leased_host import LeasedReadinessHost
@@ -59,6 +59,7 @@ class ManagedCallPort:
         snapshot_config_prefix: str | None = None,
         snapshot_max_file_bytes: int = 16 * 1024 * 1024,
         locked_model_config_prefix: str | None = None,
+        trusted_model_sha256: Callable[[str], Mapping[str, str]] | None = None,
     ) -> ManagedCallPort:
         return cls(RealStopFirstHost(
             roots, root_ref=root_ref,
@@ -67,6 +68,7 @@ class ManagedCallPort:
             snapshot_config_prefix=snapshot_config_prefix,
             snapshot_max_file_bytes=snapshot_max_file_bytes,
             locked_model_config_prefix=locked_model_config_prefix,
+            trusted_model_sha256=trusted_model_sha256,
         ))
 
     def invoke(self, text: str) -> str | bytes:
