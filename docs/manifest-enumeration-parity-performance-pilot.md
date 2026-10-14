@@ -187,3 +187,37 @@ The **NO_GO** decision remains unchanged: negligible median difference
 of 0.0335 ms for the installed 67-manifest tree, and no proof of general
 path-string behavior parity. Do not turn this into an `os.walk`
 production optimization.
+
+## CI portability repair — 2026-10-14 (pending matrix verification)
+
+GitHub Actions on `main` at commit `68ff60e04cdfbac3f43a8b80901b15fc74e6d8d2`
+reported a red core matrix: Python 3.11 passed on Ubuntu and Windows,
+while Python 3.12–3.14 failed only the research-only manifest enumeration
+parity assertions. Logs: [CI run 38123727386](https://github.com/kymuco/invariant-runtime/actions/runs/38123727386).
+In particular:
+
+- The nested-folder test required `Path.rglob()` and `os.walk()` to
+  return the same *order* on every Python release and filesystem. That
+  is not a documented enumeration-order guarantee.
+- The Windows mixed-case test hard-coded a specific Python 3.11
+  path-spelling observation (lowercased `Path.rglob()` result), although
+  the CI newer-Python baseline returned the actual uppercase spelling.
+  Both discovered the same filesystem object on the tested Windows
+  runner.
+
+This small test-only repair retains the *exact ordered path-string*
+eligibility rule and all existing negative parity checks. The
+positive tests require full discovered-path membership with exact counts;
+they compute eligibility from observed sequences rather than assert
+a universal order or case rewrite. A new deterministic negative case
+requires the comparison to reject **two spellings for the same file**
+with distinct path strings. The producer `examples/profile_manifest_enumeration.py`
+and production `ManifestSource.discover` remain unchanged.
+
+The measured production optimization decision is still **NO_GO**.
+A green research test means the comparison correctly reports the observed
+differences; it is not evidence that the proposed `os.walk` implementation
+is semantically equivalent on every Python/OS combination.
+
+Scope of this change: research pilot tests + explanatory docs only.
+The CI matrix must pass on the new branch before claiming CI recovery.
