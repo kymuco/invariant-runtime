@@ -49,9 +49,12 @@ The PowerShell wrapper:
 4. Installs both candidate wheels with `pip install --no-deps`.
    It must NOT `pip install runplane` with dependency resolution, which
    would fetch the old Invariant pin.
-5. Copies the probe into the external proof directory and launches it
-   under `venv/python -I`. It asserts that both module `__file__`
-   paths are from that environment's `site-packages`, not either checkout.
+5. **Separately fetches and pins the research branch Git object** for
+   `tools/runplane_installed_compat_probe.py`, because that probe does
+   *not* exist in the older pinned candidate Invariant wheel commit.
+   Extracts that verified object into the external proof directory, then
+   launches it under `venv/python -I`. Both module `__file__` paths
+   must come from that environment's `site-packages`, not either checkout.
 6. Tests real `Runplane.create()`, the installed required plugin inventory,
    `invariant:echo` initialized plugin, all **29** canonical effect
    descriptors, actual `workspace.path_stat` and `workspace.read_file`,
@@ -95,6 +98,50 @@ if (-not $?) { throw "INVARIANT_RUNPLANE_PROOF_FAILED" }
 
 **Alternative:** if this research branch is checked out, directly run
 `& .\tools\runplane_installed_wheel_proof.ps1 -RunplaneRepo W:\dev\hde\runplane`.
+
+## Recover the 2026-10-15 probe extraction failure without rebuilding
+
+The first Windows report shows **both wheels built and installed**, then
+`Copy-Item` failed: the script wrongly tried to read the research-only
+Python probe from the older Invariant worktree at `0f81d09`. The
+underlying installed consumer E2E **has not run**; the already-built
+wheels do not need to be rebuilt merely to correct that script path.
+
+The wrapper now fetches the research branch independently, pins its Git
+object SHA and extracts the probe from that object, not from the runtime
+worktree. If the original unique temp proof root still exists, it can be
+reused for the actual Python E2E:
+
+```powershell
+$invariant = "W:\dev\invariant-runtime"
+$root = "C:\Users\toumi\AppData\Local\Temp\invariant-runplane-wheel-b0c494c91b394c0ba7a4edb7b888820d"
+$python = Join-Path $root "consumer-venv\Scripts\python.exe"
+$probe = Join-Path $root "external_probe.py"
+
+if (-not (Test-Path $python)) { throw "PRIOR_WHEEL_VENV_NOT_FOUND" }
+
+git -C $invariant fetch origin research/runplane-installed-wheel-consumer-2026-10-15
+if ($LASTEXITCODE -ne 0) { throw "PROBE_FETCH_FAILED" }
+$probeSource = & git -C $invariant show "FETCH_HEAD:tools/runplane_installed_compat_probe.py"
+if ($LASTEXITCODE -ne 0 -or -not $probeSource) { throw "PROBE_EXTRACTION_FAILED" }
+$probeSource | Set-Content -LiteralPath $probe -Encoding UTF8
+
+Push-Location $root
+try {
+    & $python -I $probe
+    if ($LASTEXITCODE -ne 0) { throw "RUNPLANE_CONSUMER_E2E_FAILED" }
+    Write-Host "INVARIANT_RUNPLANE_INSTALLED_WHEEL_GATE_OK"
+}
+finally {
+    Pop-Location
+}
+```
+
+This is the fastest recovery path for the *already built* candidate
+wheels. Alternatively, fetch/export the updated wrapper with the original
+invocation to rebuild from scratch. Do not label E2E PASS until the
+probe itself exits zero with its evidence markers.
+
 
 If the script fails, report the FIRST error and proof root path. No
 manual edits to either source repository should be needed. Keep
