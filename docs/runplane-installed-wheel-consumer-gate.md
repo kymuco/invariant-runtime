@@ -1,6 +1,6 @@
 # Independent installed-wheel consumer proof — Runplane × Invariant
 
-**Status: scripted, native Windows E2E PENDING. Not production-approved.**
+**Status: scoped native Windows installed-wheel consumer E2E PASS (operator output, 2026-10-15). Not production-approved and not a dependency-pin update.**
 
 ## Purpose
 
@@ -166,3 +166,37 @@ Runplane code or release pins.
 **No automatic merge and no Runplane version-pin update** from a single
 E2E proof. A pin update should have a separate Runplane-owned
 compatibility/release decision and full consumer regression evidence.
+
+## Verified Windows installed consumer E2E — 2026-10-15
+
+The operator successfully resumed the prebuilt independent wheel environment
+without rebuilding either package. Windows PowerShell fetched the research
+probe with `git show FETCH_HEAD:tools/runplane_installed_compat_probe.py`,
+copied it to the proof root and executed it with `consumer-venv\Scripts\python.exe -I`.
+The actual terminal output confirms the following exact evidence:
+
+```text
+INVARIANT_RUNPLANE_WHEEL_PROOF_JSON={"canonical_effects": 29, "consumer_scope": "real_installed_runplane_sdk_readonly_plus_real_plugin_host_close", "historical_pin_bypassed_for_candidate": true, "invariant_import": "C:\\Users\\toumi\\AppData\\Local\\Temp\\invariant-runplane-wheel-b0c494c91b394c0ba7a4edb7b888820d\\consumer-venv\\Lib\\site-packages\\invariant\\__init__.py", "invariant_version": "0.1.0", "pass": true, "plugins_discovered": 67, "runplane_import": "C:\\Users\\toumi\\AppData\\Local\\Temp\\invariant-runplane-wheel-b0c494c91b394c0ba7a4edb7b888820d\\consumer-venv\\Lib\\site-packages\\runplane\\__init__.py", "runplane_version": "0.1.0a0", "schema": "INVARIANT_RUNPLANE_INSTALLED_WHEEL_CONSUMER_V1"}
+INVARIANT_RUNPLANE_INSTALLED_CONSUMER_PASS
+INVARIANT_RUNPLANE_INSTALLED_WHEEL_GATE_OK
+```
+
+**Verdict: SCOPED PASS for the exact candidate pair**:
+Invariant `0f81d09f517390fc2f0ae0a6ccce55eb56316763`, Runplane
+`8385b348b54901103feab887f453a0ae36daa71f`. The proof checks
+real installed public Runplane bootstrap, 67 discovered plugins, 29
+canonical effects, initialized `invariant:echo`, read-only
+`workspace.path_stat` / `workspace.read_file` on a disposable file
+with unchanged SHA-256, plus an internal diagnostic
+`RuntimeHost` + actual `RunplaneService` create/get/ping/close path.
+Import locations are both within isolated wheel environment
+`site-packages`. Source trees and main branches remained unchanged.
+
+The first attempt failed at the research probe's incorrectly chosen source
+path (harness error), then this resumed attempt completed successfully
+without rerunning the wheel builds. This supports the scoped candidate
+consumer contract only. It does **not** prove the general concurrent
+shutdown behavior inside Runplane's own SDK, production readiness, or
+that default `pip install runplane` selects these wheel bytes: Runplane
+still pins the older Invariant Git revision. That requires a separate
+Runplane-owned dependency upgrade and regression checks if desired.
