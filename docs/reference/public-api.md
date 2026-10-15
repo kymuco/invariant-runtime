@@ -201,7 +201,7 @@ Public capability identities, structural types, and broad operation errors also 
 | `WORKSPACE_CAPABILITY` | `workspace@0.3.0` contract. |
 | `HTTP_CAPABILITY` | `http@0.1.0` contract. |
 | `KEY_VALUE_CAPABILITY` | `kv@0.1.0` contract. |
-| `PROCESS_CAPABILITY` | `process@0.1.0` workspace-bound process contract. |
+| `PROCESS_CAPABILITY` | `process@0.2.0` workspace-bound process contract. |
 | `CONFIG_SOURCE_CAPABILITY` | `config_source@0.1.0` contract. |
 | `INSPECTOR_CAPABILITY` | `inspector@0.1.0` contract. |
 | `FilesystemCapability` | Structural filesystem operations available to plugin code. |
