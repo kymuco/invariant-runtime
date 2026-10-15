@@ -91,26 +91,32 @@ def test_documentation_home_is_a_product_front_door() -> None:
     home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
     styles = (_DOCS_ROOT / "stylesheets" / "invariant.css").read_text(encoding="utf-8")
 
-    assert "Plugins, by contract." in home
-    assert "iv-hero" in home
-    assert "iv-path-grid" in home
-    assert "iv-stage-track" in home
-    assert "iv-security" in home
-    assert "Build your first plugin" in home
+    assert "Plugins have lifetimes. Give them an owner." in home
+    assert "iv-opening" in home
+    assert "iv-editorial" in home
+    assert "iv-ledger" in home
+    assert "iv-note" in home
+    assert "Make a plugin" in home
     assert "hide:\n  - toc" in home
-    assert "No mandatory third-party runtime dependencies." in home
-    assert "not a sandbox" in home
+    assert "No mandatory third-party runtime dependencies." not in home
+    assert "standard library" in home
+    assert "not a hostile-code sandbox" in home
+    assert "iv-path-grid" not in home
+    assert "iv-stage-track" not in home
 
     for selector in (
-        ".iv-hero",
-        ".iv-hero-art",
-        ".iv-path-grid",
-        ".iv-split",
-        ".iv-stage-track",
-        ".iv-security",
+        ".iv-opening",
+        ".iv-figure",
+        ".iv-editorial",
+        ".iv-ledger",
+        ".iv-note",
+        ".iv-route-list",
     ):
         assert selector in styles
 
+    # The selected design intentionally avoids Runplane-like step/card strips.
+    assert ".iv-stage-track" not in styles
+    assert ".iv-path-grid" not in styles
 
 def test_site_markdown_links_stay_inside_docs_root() -> None:
     escaped: list[str] = []
@@ -151,20 +157,24 @@ def test_invariant_hero_is_local_accessible_and_theme_aware() -> None:
 
     for theme in ("light", "dark"):
         asset = _DOCS_ROOT / "assets" / f"invariant-hero-{theme}.svg"
-        svg = ET.fromstring(asset.read_text(encoding="utf-8"))
+        content = asset.read_text(encoding="utf-8")
+        svg = ET.fromstring(content)
         ns = "{http://www.w3.org/2000/svg}"
         assert svg.tag == ns + "svg"
-        assert svg.attrib["viewBox"] == "0 0 1440 432"
+        assert svg.attrib["viewBox"] == "0 0 1440 480"
         assert svg.attrib["role"] == "img"
         assert svg.find(ns + "title") is not None
         assert svg.find(ns + "desc") is not None
-        content = asset.read_text(encoding="utf-8")
-        assert "DISCOVER" in content
-        assert "RESOLVE" in content
-        assert "ACTIVATE" in content
-        assert "RELEASE" in content
+        assert "fixed-point" in content
+        assert "MANIFEST" in content
+        assert "PLUGIN" in content
+        assert "CAPABILITY" in content
+        assert "Small core. Clear ownership." in content
+        assert "LIFECYCLE / 04 STATES" not in content
         assert "<script" not in content
+        assert "<image" not in content
         assert "http://" not in content.replace("http://www.w3.org/2000/svg", "")
+        assert "https://" not in content
         assert f"assets/invariant-hero-{theme}.svg" in home
         assert f"docs/assets/invariant-hero-{theme}.svg" in readme
 
@@ -172,3 +182,27 @@ def test_invariant_hero_is_local_accessible_and_theme_aware() -> None:
     assert "SECURITY.md" in readme
     for name in ("CONTRIBUTING.md", "SUPPORT.md"):
         assert (_REPO_ROOT / name).is_file()
+
+
+def test_invariant_identity_is_independent_and_dependent_free() -> None:
+    readme = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
+    styles = (_DOCS_ROOT / "stylesheets" / "invariant.css").read_text(
+        encoding="utf-8"
+    )
+    style_guide = (_DOCS_ROOT / "STYLE.md").read_text(encoding="utf-8")
+
+    for name in ("runplane", "character_os", "capability_lab"):
+        assert name not in readme.casefold()
+        assert name not in home.casefold()
+
+    assert "zero mandatory third-party runtime dependencies" in readme.lower()
+    assert "invariant.api" in readme
+    assert "invariant.spec" in readme
+    assert "invariant.api" in home
+    assert "invariant.spec" in home
+
+    for token in ("#5b3db0", "#267f73", "#fbfafe", "#151126"):
+        assert token in styles.lower()
+    for label in ("Iris / mineral", "Cobalt / ember", "Pine / citrus"):
+        assert label in style_guide
