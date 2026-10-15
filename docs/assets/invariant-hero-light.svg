@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" width="1440" height="480" role="img" aria-labelledby="title desc">
 <title id="title">Invariant — a small runtime, an explicit boundary</title>
-<desc id="desc">The Invariant wordmark beside a fixed central coordinate; manifest, plugin and capability connections surround the stable runtime point. This is a conceptual motif, not a hot-swap guarantee.</desc>
+<desc id="desc">The Invariant wordmark beside a fixed-point symbol; manifest, plugin and capability connections surround the central runtime. This is a conceptual motif, not a hot-swap guarantee.</desc>
 <defs><clipPath id="art"><rect x="0" y="0" width="1440" height="480" rx="0"/></clipPath></defs>
 <rect x="0" y="0" width="1440" height="480" fill="#FAF9FD"/>
 <g clip-path="url(#art)">
