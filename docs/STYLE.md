@@ -127,6 +127,17 @@ Prefer direct, precise language. Remove repeated claims, marketing filler, unnec
 
 Simplicity is not the absence of detail. It is placing detail at the depth where it becomes useful.
 
+## Invariant's visual identity
+
+The documentation is an **engineering folio**, not a marketing dashboard. Its visual language is graphite typography, warm-paper surfaces, a restrained copper accent, crisp linework, and short monospace labels for lifecycle stages.
+
+- Prefer small diagrams that explain **discover → resolve → activate → release** over abstract gradients, stock photos or general AI imagery.
+- Keep the front door readable as Markdown in GitHub; the rendered site may enrich that same content with a self-contained dark/light SVG treatment.
+- Use system fonts, responsive layouts, keyboard-visible focus, and reduced-motion fallbacks. No external fonts, JavaScript bundles, or mandatory runtime packages are introduced for the appearance.
+- Public-facing pages should explain Invariant on its own merits, without leaning on the names or success claims of unrelated applications.
+- Present alpha status and security limits alongside benefits; never let design suggest stronger guarantees than the API and tests establish.
+- Reuse `docs/assets/invariant-hero-{light,dark}.svg` and `docs/stylesheets/invariant.css` only when they improve understanding. Avoid a second unrelated design system in downstream guides.
+
 ## Rendered site
 
 The rendered documentation site is a presentation layer over the Markdown sources. Content remains canonical in the repository; site configuration and styling must not create a second source of truth.
