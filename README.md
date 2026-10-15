@@ -1,23 +1,41 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/invariant-hero-dark.svg">
+  <img src="docs/assets/invariant-hero-light.svg" alt="Invariant Runtime — extensibility with boundaries; discover, resolve, activate, release" width="100%">
+</picture>
+
 # Invariant Runtime
 
-**Extensibility, with boundaries.**
+**A dependency-free Python plugin runtime. Explicit contracts. Owned lifecycle.**
 
-Invariant is a small, standard-library-only Python runtime for versioned plugins, explicit dependencies, policy-scoped capabilities, and owned lifecycle. It helps applications add capabilities without moving product logic into the runtime.
+Invariant is a small, embeddable runtime for applications that need versioned plugins, declared dependencies, policy-governed capabilities, and predictable runtime ownership—without adopting a larger framework.
 
-Python 3.11+ &nbsp; · &nbsp; No mandatory third-party runtime dependencies &nbsp; · &nbsp; 0.1.0 alpha &nbsp; · &nbsp; Apache-2.0
+[![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-455554)](pyproject.toml)
+[![Apache--2.0](https://img.shields.io/badge/license-Apache--2.0-A75B2C)](LICENSE)
 
-- **Versioned discovery** — explicit manifests identify plugins, versions, and sources.
-- **Dependency resolution** — plugin and capability requirements are declared rather than inferred.
-- **Governed host access** — capabilities are handles supplied according to host policy.
-- **Owned lifecycle** — the runtime manages activation, cleanup, and rollback of runtime-owned state.
+[**Get started**](docs/getting-started.md) · [**Runtime model**](docs/concepts/runtime-model.md) · [**Public API**](docs/reference/public-api.md) · [**Documentation**](docs/index.md)
 
-> Invariant is infrastructure, not an agent or application framework. Workflows, companions, approval, marketplaces, and product decisions belong to the application using it.
+## A small core for a difficult boundary
 
-## Try it
+Discovering Python modules is easy. Owning their identity, activation, dependencies, authority, and cleanup as an application grows is harder.
 
-From a source checkout with Python 3.11 or newer (no test dependencies needed):
+| Boundary | What Invariant provides |
+| :-- | :-- |
+| **Identity** | Versioned manifest discovery and deterministic selection |
+| **Dependencies** | Explicit plugin and capability requirements |
+| **Authority** | Policy-scoped handles for governed host resources |
+| **Ownership** | Managed and execution-scoped lifecycles, cleanup and runtime-owned rollback |
+| **Integration** | A narrow host-facing `invariant.api` and plugin-facing `invariant.spec` |
+
+**No mandatory third-party runtime dependencies.** Invariant itself uses the Python standard library. Individual plugins may use other Python packages; the runtime does not make those packages mandatory for every host.
+
+## First plugin
+
+From a source checkout with Python **3.11+**:
 
 ```bash
+git clone https://github.com/kymuco/invariant-runtime.git
+cd invariant-runtime
 python -m pip install .
 python examples/hello_plugin/run.py
 ```
@@ -28,7 +46,7 @@ Expected output:
 Hello, Invariant!
 ```
 
-The supported host-facing API is intentionally small:
+The host-facing integration can be as small as:
 
 ```python
 from invariant.api import PluginService
@@ -41,81 +59,48 @@ finally:
     service.close()
 ```
 
-Build the same plugin from an empty directory in **[Getting started](docs/getting-started.md)**.
+Build the plugin from three files in the [step-by-step guide](docs/getting-started.md). The guide uses an executable example checked against the source.
 
-## Choose your starting point
-
-| Goal | Read |
-| --- | --- |
-| Add a capability by writing a plugin | [Getting started](docs/getting-started.md) |
-| Extend an existing Python application | [Public API](docs/reference/public-api.md) |
-| Understand the mental model | [Runtime model](docs/concepts/runtime-model.md) |
-| Design a production plugin | [Plugin authoring](docs/guides/plugin-authoring.md) |
-| Define or validate a manifest | [Manifest v1](docs/reference/manifest-v1.md) |
-| Work with host resources | [Capabilities](CAPABILITIES.md) |
-| Understand trust and isolation | [Security](SECURITY.md) |
-| Modify the runtime itself | [Core architecture](docs/core.md) |
-
-The **[documentation home](docs/index.md)** contains the complete map.
-
-## Public surface
-
-Invariant 0.1 keeps its supported imports deliberately narrow:
-
-```python
-from invariant import __version__       # package metadata
-from invariant.api import PluginService  # host-facing API
-from invariant.spec import BasePlugin    # plugin-author API
-```
-
-Application code should prefer `invariant.api`. Plugin code should prefer `invariant.spec`.
-
-`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`, and unexported objects inside the public packages remain implementation-level surfaces in the 0.1 line. See the [Public API reference](docs/reference/public-api.md) for the complete compatibility contract.
-
-The package ships a `py.typed` marker for PEP 561 inline typing support.
-
-## Runtime model
+## How it fits together
 
 ```text
-manifest / source
-       │
-       ▼
-   discovery
-       │
-       ▼
-version selection
-       │
-       ▼
-dependency resolution
-       │
-       ▼
-transactional activation
-       │
-       ▼
-policy-scoped capabilities
-       │
-       ▼
-commit · rollback · shutdown
+                  APPLICATION / HOST
+                       │
+                PluginService
+                       │
+            manifest discovery
+                       ▼
+           versioned dependency graph
+                       ▼
+         policy-scoped capability wiring
+                       ▼
+           activation / owned lifecycle
+                       │
+                 PLUGIN CODE
 ```
 
-The public host API keeps these internal layers behind `PluginService`. Read the [Runtime model](docs/concepts/runtime-model.md) when you need the details.
+Plugin behavior stays ordinary Python. The host owns its policy and application decisions; Invariant owns the runtime mechanisms around them.
 
-## Security boundary
+**This is not a hostile-code sandbox.** In-process plugins are trusted Python; process isolation and capability policies do not by themselves secure untrusted plugins. See the [security model](SECURITY.md). Runtime-owned rollback also cannot undo arbitrary external side effects.
 
-Capabilities are an **API and policy boundary**, not a complete hostile-code sandbox.
+## Pick your path
 
-In-process plugins are trusted code. Isolated plugin processes provide dependency and failure separation, but hostile or marketplace code requires stronger external isolation with explicit filesystem, network, resource, process, and secret controls.
+| I want to… | Start with |
+| :-- | :-- |
+| Write my first plugin | [Getting started](docs/getting-started.md) |
+| Understand the boundaries | [Runtime model](docs/concepts/runtime-model.md) |
+| Embed Invariant in a host | [Public API](docs/reference/public-api.md) |
+| Describe a plugin precisely | [Manifest v1](docs/reference/manifest-v1.md) |
+| Give a plugin governed resources | [Capabilities](CAPABILITIES.md) |
+| Contribute a fix or documentation | [Contributing](CONTRIBUTING.md) |
+| Understand scope and future work | [Project status](docs/project/status.md) |
 
-Read [SECURITY.md](SECURITY.md) before designing an untrusted-plugin system.
+## Status and compatibility
 
-## Status
+**0.1.0 alpha on `main`** · Python 3.11+ · Apache-2.0.
 
-Invariant Runtime is currently **0.1.0 / alpha**.
+The supported 0.x public imports are `invariant.api`, `invariant.spec`, and the root package's `__version__`. Internal layers (`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`) may evolve without the same compatibility promise.
 
-`ManifestSource` and `FilesystemSource` are implemented. `EntrypointSource`, `ZipSource`, and `RemoteSource` are incomplete and are not presented as production-ready discovery backends.
+`ManifestSource` and `FilesystemSource` are implemented. Entrypoint, ZIP, and remote discovery are incomplete and not production-ready. Alpha status is a compatibility warning, not a claim that every advanced use case is supported.
 
-Invariant originated inside **Project Invariant** on January 31, 2026, was later reused by **Character_OS** and **Runplane**, and was reconciled into this standalone canonical repository in August 2026. Historical commits are preserved intentionally.
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE).
+[Public API reference](docs/reference/public-api.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [Apache-2.0 license](LICENSE)
