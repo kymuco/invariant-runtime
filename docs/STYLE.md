@@ -129,14 +129,27 @@ Simplicity is not the absence of detail. It is placing detail at the depth where
 
 ## Invariant's visual identity
 
-The documentation is an **engineering folio**, not a marketing dashboard. Its visual language is graphite typography, warm-paper surfaces, a restrained copper accent, crisp linework, and short monospace labels for lifecycle stages.
+**A fixed point in a changing system.** Invariant gives plugin-driven applications an explicit ownership boundary. Its graphic identity reflects that distinction: one anchored point, several connected elements, and deliberate negative space.
 
-- Prefer small diagrams that explain **discover → resolve → activate → release** over abstract gradients, stock photos or general AI imagery.
-- Keep the front door readable as Markdown in GitHub; the rendered site may enrich that same content with a self-contained dark/light SVG treatment.
-- Use system fonts, responsive layouts, keyboard-visible focus, and reduced-motion fallbacks. No external fonts, JavaScript bundles, or mandatory runtime packages are introduced for the appearance.
-- Public-facing pages should explain Invariant on its own merits, without leaning on the names or success claims of unrelated applications.
-- Present alpha status and security limits alongside benefits; never let design suggest stronger guarantees than the API and tests establish.
-- Reuse `docs/assets/invariant-hero-{light,dark}.svg` and `docs/stylesheets/invariant.css` only when they improve understanding. Avoid a second unrelated design system in downstream guides.
+The site is intentionally **editorial rather than dashboard-like**. Use broad typographic hierarchy, a short technical proof, and unboxed contract rows. Avoid identical feature-card grids, numbered process tiles, fake product metrics and decorative gradients that could describe any developer tool.
+
+### Palette exploration
+
+Three candidate color directions were considered without changing the library's behavior:
+
+| Direction | Paper | Ink | Primary | Secondary | Assessment |
+| --- | --- | --- | --- | --- | --- |
+| Iris / mineral (**selected**) | `#FBFAFE` | `#201838` | `#5B3DB0` | `#36A897` | Distinct fixed-point geometry, readable technical purple/green system |
+| Cobalt / ember | `#F9FBFF` | `#17254A` | `#3157C5` | `#E8795A` | Clear but closer to conventional developer-product branding |
+| Pine / citrus | `#F7F8F1` | `#1B302A` | `#196456` | `#A9B844` | Reserved but too close to nature/eco visual codes |
+
+The shipped version uses **iris ink and mineral-green pointers**, with independent dark-mode colors rather than automatic inversion. No color alone conveys a contract or system state. Check link/button contrast and do not rely on the graphic to explain runtime guarantees.
+
+- The fixed-point symbol is *conceptual*: it does not promise seamless hot-swap, perfect resource release, or a permanent public API before 1.0.
+- The GitHub README works as text without the image. The SVG files are self-contained, labeled, free of scripts/remote references, and rendered through a light/dark `picture` element.
+- The source code, documentation and runtime remain independent of external fonts, JavaScript frameworks or graphics toolkits.
+- User-facing copy stands on its own. Do not use the names or success claims of unrelated projects to establish Invariant's value.
+- Honest security limits live directly beside the feature description; decorative language must not turn a policy handle into a hostile-code sandbox claim.
 
 ## Rendered site
 
