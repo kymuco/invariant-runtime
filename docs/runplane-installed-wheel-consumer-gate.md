@@ -1,0 +1,121 @@
+# Independent installed-wheel consumer proof — Runplane × Invariant
+
+**Status: scripted, native Windows E2E PENDING. Not production-approved.**
+
+## Purpose
+
+Check the behavior of a REAL separately distributed Runplane application
+using the candidate Invariant Runtime from the lifecycle fix stack
+(PR #24 → #25 → #26). Avoid source checkouts in the Python import
+environment and do not quietly resolve Runplane's OLD Invariant pin.
+
+## Exact compatibility matrix
+
+| Input | Locked commit |
+|---|---|
+| Invariant candidate | `0f81d09f517390fc2f0ae0a6ccce55eb56316763` (PR #26 head; includes #24 and #25) |
+| Runplane private repository | `8385b348b54901103feab887f453a0ae36daa71f` (main snapshot) |
+| Runplane-declared historic Invariant dependency | `3ef4166c3f9e24a6050c1076ad9af846f4f9af63` |
+| Python | Activated Windows Python >=3.11; fresh venv created by harness |
+
+**Compatibility override is explicit**: Runplane's `pyproject.toml`
+requires Invariant via a fixed older Git SHA. This gate builds both
+distribution wheels and installs with `pip install --no-deps`.
+That proves only the chosen prospective candidate pairing and does NOT
+make Runplane's pinned, default `pip install .` installation use this
+Invariant revision. The pinned consumer metadata is unchanged.
+
+Both repositories are **private**; the Invariant repository's normal
+GitHub Actions token does not implicitly have checkout rights for
+Runplane. Therefore ordinary Invariant CI only verifies its own tests;
+a cross-repository local Windows consumer gate is required unless
+explicit authorized cross-repository CI credentials become available.
+Do not call an ordinary core CI run a successful external consumer E2E.
+
+## Exact proof
+
+Source files (in this research branch, **not included in Invariant wheel**):
+
+- `tools/runplane_installed_wheel_proof.ps1` — Windows CLI orchestration,
+  pinned refs, isolated venv, wheel builds and imports, cleanup.
+- `tools/runplane_installed_compat_probe.py` — actual installed consumer.
+
+The PowerShell wrapper:
+1. Fetches only refs into each existing authenticated **local** Git repository.
+2. Creates detached temporary **worktrees** at the exact pinned commits,
+   outside both checkouts; never checks out or edits original worktrees.
+3. Builds two distribution wheels using `pip wheel --no-deps` into a
+   unique temporary proof root. Uses a fresh venv.
+4. Installs both candidate wheels with `pip install --no-deps`.
+   It must NOT `pip install runplane` with dependency resolution, which
+   would fetch the old Invariant pin.
+5. Copies the probe into the external proof directory and launches it
+   under `venv/python -I`. It asserts that both module `__file__`
+   paths are from that environment's `site-packages`, not either checkout.
+6. Tests real `Runplane.create()`, the installed required plugin inventory,
+   `invariant:echo` initialized plugin, all **29** canonical effect
+   descriptors, actual `workspace.path_stat` and `workspace.read_file`,
+   and exact byte-for-byte unchanged caller-owned fixture.
+7. Separately constructs Invariant's internal diagnostic `RuntimeHost`
+   with a REAL Runplane `RunplaneService` and a real `invariant:echo`
+   plugin. Tests create execution → plugin_get → ping →
+   host.close → no remaining execution → no new admission →
+   idempotent host.close. This probe intentionally imports
+   `invariant.ops.host` **inside the test**, NOT in Runplane production.
+8. Removes temporary worktrees on completion/failure while preserving
+   the proof root wheelhouse, fresh venv, and copied script as evidence.
+
+Successful output must include BOTH:
+- `INVARIANT_RUNPLANE_WHEEL_PROOF_JSON={"pass":true,...}`
+- `INVARIANT_RUNPLANE_INSTALLED_WHEEL_GATE_OK`
+
+No pass is claimed until the Windows invocation exits 0 and these
+markers plus the actual installed import locations are seen.
+
+## Windows invocation
+
+From any PowerShell working directory (does not require switching Git
+branches), fetch the proof branch and extract the orchestrator with
+`git show`, or use a temporary separate checkout of that branch:
+
+```powershell
+$invariant = "W:\dev\invariant-runtime"
+$runplane = "W:\dev\hde\runplane"
+
+git -C $invariant fetch origin research/runplane-installed-wheel-consumer-2026-10-15
+
+# Export the script ONLY to an external file; no git switch of your checkout.
+$script = Join-Path $env:TEMP "invariant-runplane-consumer-proof.ps1"
+git -C $invariant show "FETCH_HEAD:tools/runplane_installed_wheel_proof.ps1" |
+    Set-Content -LiteralPath $script -Encoding UTF8
+
+& $script -InvariantRepo $invariant -RunplaneRepo $runplane
+if (-not $?) { throw "INVARIANT_RUNPLANE_PROOF_FAILED" }
+```
+
+**Alternative:** if this research branch is checked out, directly run
+`& .\tools\runplane_installed_wheel_proof.ps1 -RunplaneRepo W:\dev\hde\runplane`.
+
+If the script fails, report the FIRST error and proof root path. No
+manual edits to either source repository should be needed. Keep
+`$ErrorActionPreference='Stop'`; do not treat stale `$LASTEXITCODE`
+after a PowerShell command-not-found as test success.
+
+## Acceptance and non-goals
+
+PASS establishes compatibility of these exact two independent wheel
+builds for real read-only filesystem effects, manifest loading, plugin
+activation, and single execution host shutdown. FAIL blocks changing
+Runplane's real pinned dependency until corrected.
+
+The script does NOT exercise the blocked concurrent shutdown scenario
+on a real plugin; deterministic concurrent lifecycle regressions are
+covered in the underlying Invariant suite. It does NOT prove:
+GPU loading, desktop automation reliability, network/process effects,
+hostile-plugin containment, atomic package migration, or general
+compatibility with future Runplane commits. It does not change any
+Runplane code or release pins.
+
+**No automatic merge and no Runplane version-pin update** from a single
+E2E proof. A pin update should have a separate Runplane-owned
+compatibility/release decision and full consumer regression evidence.
