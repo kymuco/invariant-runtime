@@ -23,7 +23,7 @@ NAMES = (
 )
 _ROW = re.compile(
     r"^\| `(?P<name>[A-Z_]+_CAPABILITY)` \| "
-    r"`(?P<ref>(?:invariant:capability\.)?[a-z_]+@[0-9.]+)` \|",
+    r"`(?P<ref>(?:invariant:capability\\.)?[a-z_]+@[0-9.]+)`",
     re.MULTILINE,
 )
 
