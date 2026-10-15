@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import sys
 import textwrap
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +37,23 @@ class FakeEnvManager:
     """
     def ensure_env(self, *, plugin_key: str, plugin_root: Path, deps) -> EnvInfo:  # noqa: ANN001
         return EnvInfo(env_dir=plugin_root, python_exe=Path(sys.executable), key=f"fake:{plugin_key}")
+
+
+class _WorkerStderrReceipt(logging.Handler):
+    """Signal only after pytest's earlier root capture handler got the line."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.INFO)
+        self.seen = threading.Event()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        message = record.getMessage()
+        if (
+            record.name == "invariant.isolated.worker"
+            and message.startswith("[worker:")
+            and "initialize called" in message
+        ):
+            self.seen.set()
 
 
 def _make_descriptor(tmp_path: Path) -> PluginDescriptor:
@@ -117,12 +136,29 @@ def test_isolated_proxy_unit_roundtrip(tmp_path: Path, caplog) -> None:
         assert proxy.call("ping", timeout_s=1.0) == "pong"
         assert proxy.call("add", 2, 3, timeout_s=1.0) == 5
 
-        # initialize печатает в stdout — протокол должен пережить
-        # а вывод должен уйти в stderr воркера и быть видимым на стороне хоста
-        caplog.set_level("INFO")
-        proxy.initialize()  # без deps
-        assert any("initialize called" in r.message for r in caplog.records), \
-            "worker stderr output is not surfaced (check stderr->logger piping in _WorkerClient)"
+        # The RPC response and worker stderr use DIFFERENT pipes and
+        # independent parent reader threads. A successful initialize()
+        # response does not guarantee stderr has reached caplog yet.
+        caplog.set_level(logging.INFO, logger="invariant.isolated.worker")
+        receipt = _WorkerStderrReceipt()
+        root_logger = logging.getLogger()
+        # caplog's handler is already installed on root; append our
+        # receipt AFTER it so the Event means caplog has seen the line.
+        root_logger.addHandler(receipt)
+        try:
+            proxy.initialize()  # no deps
+            assert receipt.seen.wait(timeout=3.0), (
+                "worker stderr output did not reach the host logger"
+            )
+            assert any(
+                record.name == "invariant.isolated.worker"
+                and record.getMessage().startswith("[worker:")
+                and "initialize called" in record.getMessage()
+                for record in caplog.records
+            ), "worker stderr output was not captured by pytest"
+        finally:
+            root_logger.removeHandler(receipt)
+            receipt.close()
 
         # method_timeouts-проверка: timeout_s не передаём, должен примениться method_timeouts["slow"]=0.2
         t0 = time.monotonic()
