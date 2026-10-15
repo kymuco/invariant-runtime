@@ -22,11 +22,15 @@ Hello, Invariant!
 - Python 3.11 or newer (the package declares `requires-python >=3.11`)
 - Invariant Runtime installed in the active environment
 
-From a source checkout, install it with:
+Clone the source repository and install it locally:
 
 ```bash
+git clone https://github.com/kymuco/invariant-runtime.git
+cd invariant-runtime
 python -m pip install .
 ```
+
+These instructions install the checked-out source. They do **not** assume that the package has already been published on a package registry. For a reproducible application deployment, pin an approved version or commit after validating its compatibility contract.
 
 Invariant uses only the Python standard library at runtime. The optional `[test]` and `[docs]` extras are for development, not for running plugins.
 
