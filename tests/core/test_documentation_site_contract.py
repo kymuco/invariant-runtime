@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -90,14 +91,24 @@ def test_documentation_home_is_a_product_front_door() -> None:
     home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
     styles = (_DOCS_ROOT / "stylesheets" / "invariant.css").read_text(encoding="utf-8")
 
-    assert "Runtime boundaries you can reason about." in home
+    assert "Plugins, by contract." in home
     assert "iv-hero" in home
     assert "iv-path-grid" in home
+    assert "iv-stage-track" in home
     assert "iv-security" in home
     assert "Build your first plugin" in home
     assert "hide:\n  - toc" in home
+    assert "No mandatory third-party runtime dependencies." in home
+    assert "not a sandbox" in home
 
-    for selector in (".iv-hero", ".iv-path-grid", ".iv-split", ".iv-security"):
+    for selector in (
+        ".iv-hero",
+        ".iv-hero-art",
+        ".iv-path-grid",
+        ".iv-split",
+        ".iv-stage-track",
+        ".iv-security",
+    ):
         assert selector in styles
 
 
@@ -132,3 +143,32 @@ def test_site_wrappers_keep_root_contracts_canonical() -> None:
     assert 'frozenset({"CAPABILITIES.md", "SECURITY.md"})' in macros
     assert (_REPO_ROOT / "CAPABILITIES.md").is_file()
     assert (_REPO_ROOT / "SECURITY.md").is_file()
+
+
+def test_invariant_hero_is_local_accessible_and_theme_aware() -> None:
+    home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
+    readme = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+    for theme in ("light", "dark"):
+        asset = _DOCS_ROOT / "assets" / f"invariant-hero-{theme}.svg"
+        svg = ET.fromstring(asset.read_text(encoding="utf-8"))
+        ns = "{http://www.w3.org/2000/svg}"
+        assert svg.tag == ns + "svg"
+        assert svg.attrib["viewBox"] == "0 0 1440 432"
+        assert svg.attrib["role"] == "img"
+        assert svg.find(ns + "title") is not None
+        assert svg.find(ns + "desc") is not None
+        content = asset.read_text(encoding="utf-8")
+        assert "DISCOVER" in content
+        assert "RESOLVE" in content
+        assert "ACTIVATE" in content
+        assert "RELEASE" in content
+        assert "<script" not in content
+        assert "http://" not in content.replace("http://www.w3.org/2000/svg", "")
+        assert f"assets/invariant-hero-{theme}.svg" in home
+        assert f"docs/assets/invariant-hero-{theme}.svg" in readme
+
+    assert "CONTRIBUTING.md" in readme
+    assert "SECURITY.md" in readme
+    for name in ("CONTRIBUTING.md", "SUPPORT.md"):
+        assert (_REPO_ROOT / name).is_file()
