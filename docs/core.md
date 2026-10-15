@@ -109,6 +109,10 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 - `ManifestSource` and `FilesystemSource` are implemented.
 - `EntrypointSource`, `ZipSource`, and `RemoteSource` remain incomplete/stubbed.
 
+## Alpha readiness and operational guarantees
+
+For the evidence-scoped readiness decision, public compatibility limits, lifecycle diagnostics and the release gates for a future 0.x alpha, see [Alpha readiness audit (2026-10-15)](alpha-release-readiness-2026-10-15.md). The audit does not promote internal ops interfaces or publish a release.
+
 ## Deliberate exclusions
 
 The following do not belong in the Invariant core:
