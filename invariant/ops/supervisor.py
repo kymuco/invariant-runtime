@@ -487,9 +487,12 @@ class ExecutionSupervisor:
                     )
             threading.Thread(target=_warn, daemon=True).start()
 
-        # Phase A: cheap checks under lock (do NOT hold lock during activation)
+        # Acquire the SAME per-execution in-flight fence as plugin_call.
+        # This includes initialization inside ctx.get(), which may outlive
+        # a watchdog timeout, rollback, or host request cancellation.
         with session._lock:
             if session.state is not ExecutionState.ACTIVE or session._closing:
+                warn_evt.set()
                 raise ExecutionStateError(f"Execution is not active: {session.state.name}")
 
             if tracer and hasattr(tracer, "note_execution_touched"):
@@ -503,20 +506,46 @@ class ExecutionSupervisor:
                     pass
 
             session.touch()
+            session._inflight_calls += 1
 
-        # Phase B: activation outside session lock (with watchdog timeout)
+        def _release_get(_future=None) -> None:
+            finalize = False
+            with session._lock:
+                session._inflight_calls = max(0, session._inflight_calls - 1)
+                if (
+                    session._closing
+                    and not session._finalized
+                    and session._inflight_calls <= 0
+                ):
+                    session._finalized = True
+                    finalize = True
+            if finalize:
+                try:
+                    session.ctx.close()
+                except Exception:
+                    pass
+
         def _load_plugin():
             with bind_execution(execution_id):
                 return session.ctx.get(plugin_id)
 
+        # Without an async worker, the calling thread releases the fence.
+        # With the watchdog pool, the FUTURE releases it on true completion
+        # (including cancellation before execution), never at caller timeout.
+        release_in_caller = True
         try:
             if self._plugin_get_timeout_s > 0:
                 pool = self._get_timeout_pool()
                 fut = pool.submit(_load_plugin)
+                fut.add_done_callback(_release_get)
+                release_in_caller = False
                 try:
                     plugin = fut.result(timeout=float(self._plugin_get_timeout_s))
                 except concurrent.futures.TimeoutError as err:
-                    detail = f"plugin_get timeout: {plugin_id} timeout_s={self._plugin_get_timeout_s}"
+                    detail = (
+                        f"plugin_get timeout: {plugin_id} "
+                        f"timeout_s={self._plugin_get_timeout_s}"
+                    )
                     self._close_execution(
                         execution_id=execution_id,
                         reason=CloseReason.LIMIT_ENFORCED,
@@ -526,27 +555,33 @@ class ExecutionSupervisor:
                     raise PluginCallTimeout("timeout", detail=detail) from err
             else:
                 plugin = _load_plugin()
+
+            # Register the handle only if this execution remains ACTIVE.
+            with session._lock:
+                if session.state is not ExecutionState.ACTIVE or session._closing:
+                    raise ExecutionStateError("Execution closed while getting plugin")
+                session.touch()
+                if tracer and hasattr(tracer, "note_execution_touched"):
+                    try:
+                        tracer.note_execution_touched(
+                            execution_id=execution_id,
+                            where="plugin_get:post",
+                            detail=f"plugin_id={plugin_id}",
+                        )
+                    except Exception:
+                        pass
+                dt_ms = int((time.monotonic() - t0) * 1000)
+                log.info(
+                    "plugin_get ok exec=%s plugin=%s dt_ms=%s",
+                    execution_id,
+                    plugin_id,
+                    dt_ms,
+                )
+                return session._new_handle(plugin)
         finally:
             warn_evt.set()
-
-        # Phase C: store handle under lock
-        with session._lock:
-            if session.state is not ExecutionState.ACTIVE or session._closing:
-                raise ExecutionStateError("Execution closed while getting plugin")
-            session.touch()
-            if tracer and hasattr(tracer, "note_execution_touched"):
-                try:
-                    tracer.note_execution_touched(
-                        execution_id=execution_id,
-                        where="plugin_get:post",
-                        detail=f"plugin_id={plugin_id}",
-                    )
-                except Exception:
-                    pass
-            dt_ms = int((time.monotonic() - t0) * 1000)
-            warn_evt.set()
-            log.info("plugin_get ok exec=%s plugin=%s dt_ms=%s", execution_id, plugin_id, dt_ms)
-            return session._new_handle(plugin)
+            if release_in_caller:
+                _release_get()
 
     def plugin_call(
         self,
