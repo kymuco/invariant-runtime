@@ -1,0 +1,34 @@
+name: Improvement proposal
+description: Describe an application-independent contract, documentation or lifecycle improvement.
+title: "[Proposal] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Invariant aims to stay product-agnostic, dependency-free and narrow. Please discuss public API additions before writing a large implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What fails or becomes unreasonably difficult using today's public interface?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction or evidence
+      description: Example of a plugin/host scenario without proprietary context.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Smallest useful change
+      description: Describe the narrowest contract that would address the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and boundaries
+      description: Existing `invariant.api` or `invariant.spec` ways, compatibility concerns, and what must remain the application's responsibility.

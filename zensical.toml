@@ -13,9 +13,6 @@ watch = [
   "CAPABILITIES.md",
 ]
 copyright = "Invariant Runtime · Apache-2.0"
-extra_css = [
-  "stylesheets/invariant.css",
-]
 nav = [
   { "Overview" = "index.md" },
   { "Getting started" = "getting-started.md" },
@@ -33,6 +30,8 @@ nav = [
   ] },
   { "Security" = "security.md" },
   { "Project" = [
+    { "Status and limitations" = "project/status.md" },
+    { "Contributing" = "project/contributing.md" },
     { "Core architecture" = "core.md" },
     { "Documentation standard" = "STYLE.md" },
   ] },
@@ -57,16 +56,12 @@ features = [
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "custom"
-accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "custom"
-accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
 
