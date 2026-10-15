@@ -27,5 +27,5 @@ def test_wrapper_fetches_proof_script_independently_of_pinned_wheel_commit():
     assert '$ProbeObject = "${ProbeCommit}:tools/runplane_installed_compat_probe.py"' in wrapper
     assert 'git -C $InvariantRepo show $ProbeObject' in wrapper
     assert '$ProbeSource | Set-Content -LiteralPath $Probe -Encoding UTF8' in wrapper
-    assert 'Join-Path $InvariantTree "tools\runplane_installed_compat_probe.py"' not in wrapper
+    assert r'Join-Path $InvariantTree "tools\runplane_installed_compat_probe.py"' not in wrapper
     assert 'Copy-Item -LiteralPath $SourceProbe' not in wrapper
