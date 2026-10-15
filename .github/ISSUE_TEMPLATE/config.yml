@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security reporting
+    url: https://github.com/kymuco/invariant-runtime/blob/main/SECURITY.md
+    about: Do not disclose vulnerabilities in public issues; follow the private reporting instructions.
+  - name: First plugin and API docs
+    url: https://github.com/kymuco/invariant-runtime/blob/main/docs/getting-started.md
+    about: Follow the source-install quickstart and public API before filing setup questions.

@@ -1,0 +1,49 @@
+name: Bug report
+description: Report reproducible behavior that conflicts with Invariant's documented contracts.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove secrets and private paths from logs. For vulnerabilities, use the private process described in SECURITY.md instead of this public form.
+  - type: input
+    id: version
+    attributes:
+      label: Invariant version or commit
+      description: Include the installed version or an exact Git commit.
+      placeholder: "0.1.0 / commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and Python version.
+      placeholder: "Windows 11, Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Minimal reproduction
+      description: Provide code/manifest and precise steps, without private material.
+      placeholder: "1. Create a manifest ... 2. Call PluginService ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized output
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Contract or documentation link
+      description: Which supported public guarantee seems to be affected?

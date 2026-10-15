@@ -15,6 +15,8 @@ def _markdown_files() -> list[Path]:
         _REPO_ROOT / "README.md",
         _REPO_ROOT / "CAPABILITIES.md",
         _REPO_ROOT / "SECURITY.md",
+        _REPO_ROOT / "CONTRIBUTING.md",
+        _REPO_ROOT / "SUPPORT.md",
     ]
     files.extend(sorted((_REPO_ROOT / "docs").rglob("*.md")))
     files.extend(sorted((_REPO_ROOT / "examples").rglob("*.md")))

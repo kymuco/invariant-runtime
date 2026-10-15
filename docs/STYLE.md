@@ -127,6 +127,16 @@ Prefer direct, precise language. Remove repeated claims, marketing filler, unnec
 
 Simplicity is not the absence of detail. It is placing detail at the depth where it becomes useful.
 
+## Visual and editorial restraint
+
+Invariant intentionally does **not** use a decorative README header, an abstract logo illustration, feature-card landing page, or a custom illustration-based design system. The identity is the quality of the code, public contracts and documentation.
+
+- Keep the README in ordinary GitHub-flavored Markdown. Lead with a concise purpose, an executable quick start and an exact API example.
+- Treat the documentation site as a reference, not a product landing page. Prefer Markdown headings, tables and code blocks over custom HTML layout components.
+- Rely on Zensical's built-in responsive theme, light/dark support, and system fonts. Avoid remote image assets, external fonts and decorative CSS unless a specific usability problem requires them.
+- Illustrate only real architectural behavior, and do not imply security or lifecycle guarantees beyond those that are tested and documented.
+- Review both GitHub Markdown and the rendered docs before approving a change. Every link must lead to existing content.
+
 ## Rendered site
 
 The rendered documentation site is a presentation layer over the Markdown sources. Content remains canonical in the repository; site configuration and styling must not create a second source of truth.

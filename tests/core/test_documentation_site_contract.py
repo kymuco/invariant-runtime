@@ -34,7 +34,7 @@ def test_documentation_site_config_is_reproducible() -> None:
     assert project["site_dir"] == "site"
     assert project["watch"] == ["SECURITY.md", "CAPABILITIES.md"]
     assert project["repo_url"] == "https://github.com/kymuco/invariant-runtime"
-    assert project["extra_css"] == ["stylesheets/invariant.css"]
+    assert project.get("extra_css", []) == []
 
     theme = project["theme"]
     assert theme["variant"] == "modern"
@@ -88,17 +88,23 @@ def test_documentation_site_config_is_reproducible() -> None:
 
 def test_documentation_home_is_a_product_front_door() -> None:
     home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8")
-    styles = (_DOCS_ROOT / "stylesheets" / "invariant.css").read_text(encoding="utf-8")
+    readme = (_REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert "Runtime boundaries you can reason about." in home
-    assert "iv-hero" in home
-    assert "iv-path-grid" in home
-    assert "iv-security" in home
-    assert "Build your first plugin" in home
-    assert "hide:\n  - toc" in home
+    assert home.startswith("# Invariant Runtime")
+    assert "## Start here" in home
+    assert "## Documentation by task" in home
+    assert "Hello, Invariant!" in home
+    assert "not a hostile-code sandbox" in home
+    assert "python -m pip install ." in home
 
-    for selector in (".iv-hero", ".iv-path-grid", ".iv-split", ".iv-security"):
-        assert selector in styles
+    for page in (home, readme):
+        assert "<picture" not in page
+        assert "<img" not in page
+        assert "<svg" not in page
+        assert "docs/assets/" not in page
+        assert "iv-hero" not in page
+
+    assert not (_DOCS_ROOT / "stylesheets" / "invariant.css").exists()
 
 
 def test_site_markdown_links_stay_inside_docs_root() -> None:
@@ -132,3 +138,17 @@ def test_site_wrappers_keep_root_contracts_canonical() -> None:
     assert 'frozenset({"CAPABILITIES.md", "SECURITY.md"})' in macros
     assert (_REPO_ROOT / "CAPABILITIES.md").is_file()
     assert (_REPO_ROOT / "SECURITY.md").is_file()
+
+
+def test_engineering_front_door_has_no_downstream_showcase() -> None:
+    home = (_DOCS_ROOT / "index.md").read_text(encoding="utf-8").casefold()
+    readme = (_REPO_ROOT / "README.md").read_text(encoding="utf-8").casefold()
+    for name in ("runplane", "character_os", "capability_lab"):
+        assert name not in home
+        assert name not in readme
+
+    style = (_DOCS_ROOT / "STYLE.md").read_text(encoding="utf-8")
+    assert "ordinary GitHub-flavored Markdown" in style
+
+    for path in ("CONTRIBUTING.md", "SUPPORT.md"):
+        assert (_REPO_ROOT / path).is_file()
