@@ -33,6 +33,8 @@ nav = [
   ] },
   { "Security" = "security.md" },
   { "Project" = [
+    { "Status and limitations" = "project/status.md" },
+    { "Contributing" = "project/contributing.md" },
     { "Core architecture" = "core.md" },
     { "Documentation standard" = "STYLE.md" },
   ] },
