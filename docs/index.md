@@ -5,75 +5,84 @@ hide:
 
 <div class="iv-hero" markdown>
 
-<span class="iv-eyebrow">INVARIANT RUNTIME · 0.1 ALPHA</span>
+<span class="iv-eyebrow">OPEN CONTRACTS / PYTHON 3.11+ / APACHE-2.0</span>
 
-# Runtime boundaries you can reason about.
+# Plugins, by contract.
 
-Invariant is a small, policy-aware plugin runtime for Python: versioned discovery, explicit dependencies, governed host capabilities, and deterministic lifecycle without product behavior in the core.
+A lightweight Python runtime for plugins with explicit identities, declared dependencies, policy-governed access, and a lifecycle the host can reason about. No mandatory third-party runtime dependencies. No framework takeover.
 
-<div class="iv-actions" markdown>
-[Build your first plugin](getting-started.md){ .iv-button .iv-button--primary }
-[Understand the runtime](concepts/runtime-model.md){ .iv-button }
+<div class="iv-actions">
+<a href="getting-started/" class="iv-button iv-button--primary">Build your first plugin →</a>
+<a href="concepts/runtime-model/" class="iv-button">Understand the boundaries</a>
+</div>
+
+<div class="iv-hero-art">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/invariant-hero-dark.svg">
+  <img src="assets/invariant-hero-light.svg" alt="Invariant lifecycle schematic: discover, resolve, activate, release" width="100%">
+</picture>
 </div>
 
 <div class="iv-proof">
-<span>Zero runtime dependencies</span>
-<span>Strict manifests</span>
-<span>Scoped capabilities</span>
-<span>Transactional lifecycle</span>
+<span>stdlib-only core</span>
+<span>versioned manifests</span>
+<span>governed capabilities</span>
+<span>owned lifecycle</span>
 </div>
 
 </div>
 
-## Start with the job in front of you
+## Start with the work you're doing
 
-<div class="iv-path-grid" markdown>
+<div class="iv-path-grid">
 
 <div class="iv-path-card" markdown>
-<span class="iv-card-label">PLUGIN AUTHOR</span>
+<span class="iv-card-label">01 / PLUGIN AUTHOR</span>
 
 ### Build a plugin
 
-Write ordinary Python behavior, declare it with a small manifest, and let Invariant own discovery, version selection, dependency wiring, and lifecycle.
+Write a Python class, declare a versioned manifest, and let the runtime handle discovery and activation.
 
-[Getting started →](getting-started.md)
+[Build your first plugin →](getting-started.md)
 </div>
 
 <div class="iv-path-card" markdown>
-<span class="iv-card-label">APPLICATION HOST</span>
+<span class="iv-card-label">02 / APPLICATION HOST</span>
 
 ### Embed the runtime
 
-Use the narrow `invariant.api` facade to load manifests, request managed plugins, and create scoped execution or workspace contexts.
+Use the supported `PluginService` facade. Keep loaders, registries, and resolver machinery inside the runtime.
 
-[Public API →](reference/public-api.md)
+[Explore the public API →](reference/public-api.md)
 </div>
 
 <div class="iv-path-card" markdown>
-<span class="iv-card-label">RUNTIME CONTRIBUTOR</span>
+<span class="iv-card-label">03 / SYSTEM DESIGNER</span>
 
-### Work on the core
+### Define boundaries
 
-Understand the internal boundary between discovery, registry, resolution, execution, capabilities, and operational infrastructure.
+Choose lifetimes, explicit dependencies, and governed host-resource handles without coupling plugins to your application internals.
 
-[Core architecture →](core.md)
+[See the runtime model →](concepts/runtime-model.md)
 </div>
 
 </div>
 
-## One public path, not a pile of internals
+## One small public facade
 
 <div class="iv-split" markdown>
 
 <div class="iv-split-copy" markdown>
 
-### Host-facing API
+<span class="iv-card-label">HOST API / `invariant.api`</span>
 
-A manifest-first host should not need to construct loaders, registries, or resolvers itself. `PluginService` keeps those layers behind one supported facade.
+### The host stays in control
 
-The root package stays deliberately small; host code uses `invariant.api`, while plugin implementations use `invariant.spec`.
+A host declares where to discover manifests and requests a plugin by identity. Invariant manages the machinery behind that call.
 
-[Read the compatibility contract](reference/public-api.md)
+Plugin implementations depend on `invariant.spec` rather than internal runtime modules.
+
+[See public API and errors →](reference/public-api.md)
 
 </div>
 
@@ -82,69 +91,48 @@ from invariant.api import PluginService
 
 service = PluginService.from_manifest_paths(["plugins"])
 try:
-    plugin = service.get("example:hello")
+    greeter = service.get("example:hello")
+    print(greeter.greet("Invariant"))
 finally:
     service.close()
 ```
 
 </div>
 
-## Explicit boundaries at every layer
+## Four responsibilities. Clear boundaries.
 
-<div class="iv-boundary-grid" markdown>
-
-<div class="iv-boundary" markdown>
-
-### Identity & version
-
-Plugins have durable IDs and concrete versions. Selection is deterministic rather than inferred from import order or ambient state.
-
+<div class="iv-stage-track">
+<div class="iv-stage"><span class="iv-stage-index">01 / DISCOVER</span><strong>Identity</strong><p>Find manifests and select concrete versions.</p></div>
+<div class="iv-stage"><span class="iv-stage-index">02 / RESOLVE</span><strong>Dependencies</strong><p>Construct declared plugin and capability relationships.</p></div>
+<div class="iv-stage"><span class="iv-stage-index">03 / ACTIVATE</span><strong>Authority</strong><p>Wire policy-permitted handles and establish runtime-owned state.</p></div>
+<div class="iv-stage"><span class="iv-stage-index">04 / RELEASE</span><strong>Lifecycle</strong><p>Shut down and roll back runtime-owned state within documented limits.</p></div>
 </div>
 
-<div class="iv-boundary" markdown>
-
-### Dependencies & lifecycle
-
-Dependencies are declared. Activation, rollback, managed ownership, and shutdown belong to the runtime rather than to product glue.
-
-</div>
-
-<div class="iv-boundary" markdown>
-
-### Capabilities & policy
-
-Host resources are exposed through explicit capability interfaces so applications can govern access at a stable API boundary.
-
-</div>
-
-</div>
+Read the [runtime model](concepts/runtime-model.md) to see these layers in context.
 
 <div class="iv-security" markdown>
 
-<span class="iv-card-label">SECURITY BOUNDARY</span>
+<span class="iv-card-label">BOUNDARY / TRUST MODEL</span>
 
-### Policy control is not hostile-code isolation.
+### Capabilities are not a sandbox.
 
-Capabilities govern access through Invariant APIs, but in-process plugins are trusted Python code. Marketplace or hostile plugins require stronger external isolation for filesystem, network, processes, resources, and secrets.
+Policy-governed handles restrict the access made through those handles. They do not prevent trusted in-process Python code from using other APIs. Isolated workers are not a complete hostile-code sandbox, and cleanup cannot reverse arbitrary external effects.
 
-[Read the security model →](security.md)
+[Read the security guarantees and exclusions →](security.md)
 
 </div>
 
-## Documentation map
+## Reference, without the maze
 
-| If you need to… | Start here |
-| --- | --- |
-| Run a first plugin end to end | [Getting started](getting-started.md) |
-| Learn the four core concepts | [Runtime model](concepts/runtime-model.md) |
-| Grow a production plugin | [Plugin authoring](guides/plugin-authoring.md) |
-| Compose plugins with governed host access | [Dependencies and capabilities](guides/dependencies-and-capabilities.md) |
-| Embed Invariant in an application | [Public API](reference/public-api.md) |
-| Define exact plugin metadata | [Manifest v1](reference/manifest-v1.md) |
-| Work with governed host resources | [Capabilities](reference/capabilities.md) |
-| Understand trust and isolation | [Security](security.md) |
-| Modify the runtime itself | [Core architecture](core.md) |
+| Need | Exact documentation |
+| :-- | :-- |
+| Minimal setup and expected output | [Getting started](getting-started.md) |
+| Plugin lifecycle and manifest authoring | [Plugin authoring](guides/plugin-authoring.md) |
+| Plugin versus capability dependencies | [Dependencies and capabilities](guides/dependencies-and-capabilities.md) |
+| Names, defaults, and import stability | [Public API](reference/public-api.md) |
+| Manifest structure | [Manifest v1](reference/manifest-v1.md) |
+| Built-in handles and policy constraints | [Capabilities](reference/capabilities.md) |
+| Compatibility, known limits, and roadmap | [Project status](project/status.md) |
+| How to contribute safely | [Contributing](project/contributing.md) |
 
-## Documentation promise
-
-The site follows four rules: **task first**, **progressive disclosure**, **public imports in user-facing examples**, and **executable truth**. Repository examples, links, rendered-site configuration, and checked tutorials are covered by regression tests so documentation drift fails with code changes.
+<small class="iv-footnote">Invariant 0.1 is alpha software. Documentation distinguishes the supported public facade from internal implementation details and from capabilities that are not ready.</small>
