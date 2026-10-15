@@ -1,37 +1,29 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/invariant-hero-dark.svg">
-  <img src="docs/assets/invariant-hero-light.svg" alt="Invariant Runtime — extensibility with boundaries; discover, resolve, activate, release" width="100%">
+  <img src="docs/assets/invariant-hero-light.svg" alt="Invariant — a fixed-point motif connecting manifest, plugin, and capability to a small Python runtime" width="100%">
 </picture>
 
 # Invariant Runtime
 
-**A dependency-free Python plugin runtime. Explicit contracts. Owned lifecycle.**
-
-Invariant is a small, embeddable runtime for applications that need versioned plugins, declared dependencies, policy-governed capabilities, and predictable runtime ownership—without adopting a larger framework.
+**A small Python runtime for plugins with identities, dependencies, permissions, and lifetimes.**
 
 [![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-455554)](pyproject.toml)
-[![Apache--2.0](https://img.shields.io/badge/license-Apache--2.0-A75B2C)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-5841A0)](pyproject.toml)
+[![Apache--2.0](https://img.shields.io/badge/license-Apache--2.0-267F73)](LICENSE)
 
-[**Get started**](docs/getting-started.md) · [**Runtime model**](docs/concepts/runtime-model.md) · [**Public API**](docs/reference/public-api.md) · [**Documentation**](docs/index.md)
+[Get started](docs/getting-started.md) · [How it works](docs/concepts/runtime-model.md) · [Public API](docs/reference/public-api.md) · [Documentation](docs/index.md)
 
-## A small core for a difficult boundary
+## A module can be imported. A plugin needs an owner.
 
-Discovering Python modules is easy. Owning their identity, activation, dependencies, authority, and cleanup as an application grows is harder.
+A Python import tells you where the code is. It doesn't tell you which version the application intended, who supplies dependencies, which host resources the plugin may use, or what should be cleaned up if activation fails.
 
-| Boundary | What Invariant provides |
-| :-- | :-- |
-| **Identity** | Versioned manifest discovery and deterministic selection |
-| **Dependencies** | Explicit plugin and capability requirements |
-| **Authority** | Policy-scoped handles for governed host resources |
-| **Ownership** | Managed and execution-scoped lifecycles, cleanup and runtime-owned rollback |
-| **Integration** | A narrow host-facing `invariant.api` and plugin-facing `invariant.spec` |
+Invariant handles those runtime concerns while leaving the application's behavior and decisions to the application. It isn't an agent framework, and it doesn't dictate how your product works.
 
-**No mandatory third-party runtime dependencies.** Invariant itself uses the Python standard library. Individual plugins may use other Python packages; the runtime does not make those packages mandatory for every host.
+**The core has zero mandatory third-party runtime dependencies.** It's written against the Python 3.11+ standard library. Plugins can still have dependencies of their own.
 
-## First plugin
+## Try a plugin
 
-From a source checkout with Python **3.11+**:
+From a source checkout:
 
 ```bash
 git clone https://github.com/kymuco/invariant-runtime.git
@@ -46,61 +38,50 @@ Expected output:
 Hello, Invariant!
 ```
 
-The host-facing integration can be as small as:
+A host uses the public `PluginService` facade:
 
 ```python
 from invariant.api import PluginService
 
 service = PluginService.from_manifest_paths(["examples"])
 try:
-    hello = service.get("example:hello")
-    print(hello.greet("Invariant"))
+    plugin = service.get("example:hello")
+    print(plugin.greet("Invariant"))
 finally:
     service.close()
 ```
 
-Build the plugin from three files in the [step-by-step guide](docs/getting-started.md). The guide uses an executable example checked against the source.
+You can build this example from scratch in [Getting started](docs/getting-started.md). Both the tutorial and its sample files are covered by documentation tests.
 
-## How it fits together
+## What the runtime owns
 
-```text
-                  APPLICATION / HOST
-                       │
-                PluginService
-                       │
-            manifest discovery
-                       ▼
-           versioned dependency graph
-                       ▼
-         policy-scoped capability wiring
-                       ▼
-           activation / owned lifecycle
-                       │
-                 PLUGIN CODE
-```
-
-Plugin behavior stays ordinary Python. The host owns its policy and application decisions; Invariant owns the runtime mechanisms around them.
-
-**This is not a hostile-code sandbox.** In-process plugins are trusted Python; process isolation and capability policies do not by themselves secure untrusted plugins. See the [security model](SECURITY.md). Runtime-owned rollback also cannot undo arbitrary external side effects.
-
-## Pick your path
-
-| I want to… | Start with |
+| Concern | Runtime contract |
 | :-- | :-- |
-| Write my first plugin | [Getting started](docs/getting-started.md) |
-| Understand the boundaries | [Runtime model](docs/concepts/runtime-model.md) |
-| Embed Invariant in a host | [Public API](docs/reference/public-api.md) |
-| Describe a plugin precisely | [Manifest v1](docs/reference/manifest-v1.md) |
-| Give a plugin governed resources | [Capabilities](CAPABILITIES.md) |
-| Contribute a fix or documentation | [Contributing](CONTRIBUTING.md) |
-| Understand scope and future work | [Project status](docs/project/status.md) |
+| Discovery | Manifests identify plugins and concrete versions. |
+| Resolution | Declared plugin and capability dependencies are wired explicitly. |
+| Access | Host policy governs the capability handles made available. |
+| Lifecycle | Activation, managed execution, cleanup, and rollback of runtime-owned state. |
 
-## Status and compatibility
+The host decides *whether* to invoke a plugin and *what* work to ask of it. Invariant is responsible for the plugin machinery around that decision.
+
+Capabilities are **policy-controlled APIs, not a hostile-code sandbox**. In-process plugins remain trusted Python code. Runtime-owned rollback cannot undo arbitrary external side effects. Read [Security](SECURITY.md) for the exact limits.
+
+## Find the right reference
+
+| You're working on… | Read |
+| :-- | :-- |
+| Your first manifest and plugin | [Getting started](docs/getting-started.md) |
+| A host application | [Public API](docs/reference/public-api.md) |
+| A plugin with dependencies | [Plugin authoring](docs/guides/plugin-authoring.md) |
+| Resource access and policies | [Capabilities](CAPABILITIES.md) |
+| IDs and version syntax | [Manifest v1](docs/reference/manifest-v1.md) |
+| Internal architecture | [Core architecture](docs/core.md) |
+| A contribution | [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+## Status
 
 **0.1.0 alpha on `main`** · Python 3.11+ · Apache-2.0.
 
-The supported 0.x public imports are `invariant.api`, `invariant.spec`, and the root package's `__version__`. Internal layers (`invariant.load`, `invariant.catalog`, `invariant.exec`, `invariant.ops`) may evolve without the same compatibility promise.
+Only `invariant.api`, `invariant.spec`, and the root `__version__` are explicit public compatibility surfaces for 0.1. `invariant.load`, `invariant.catalog`, `invariant.exec`, and `invariant.ops` are internal. `ManifestSource` and `FilesystemSource` are implemented; entrypoint, ZIP, and remote sources are incomplete.
 
-`ManifestSource` and `FilesystemSource` are implemented. Entrypoint, ZIP, and remote discovery are incomplete and not production-ready. Alpha status is a compatibility warning, not a claim that every advanced use case is supported.
-
-[Public API reference](docs/reference/public-api.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [Apache-2.0 license](LICENSE)
+See [Project status](docs/project/status.md) for what the alpha does and doesn't promise, and [LICENSE](LICENSE) for redistribution terms.
