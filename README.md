@@ -6,10 +6,11 @@ Build extensible Python applications from independent, composable plugins. Invar
 
 [![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/Python%203.11%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![0.1 alpha](https://img.shields.io/badge/0.1%20alpha-64748B?style=flat)](docs/project/status.md)
+[![0.1 alpha](https://img.shields.io/badge/0.1.1a1%20alpha-64748B?style=flat)](docs/project/status.md)
 [![Apache-2.0](https://img.shields.io/badge/Apache--2.0-64748B?style=flat)](LICENSE)
 
-No mandatory third-party runtime dependencies. Plugins may use their own packages.
+No mandatory third-party runtime dependencies. Plugins may use their own packages.  
+**This branch stages 0.1.1a1 as an unpublished alpha candidate.**
 
 ## Quick start
 

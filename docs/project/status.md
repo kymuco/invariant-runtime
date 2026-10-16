@@ -18,7 +18,7 @@ Read [Public API](../reference/public-api.md), [Manifest v1](../reference/manife
 
 ## Compatibility status
 
-**The current released-source baseline on `main` is 0.1.0 alpha.** Alpha means public API compatibility changes remain possible before 1.0, although deliberate changes must be documented and tested.
+**The published-source baseline is 0.1.0 alpha; this branch stages an unpublished 0.1.1a1 candidate.** Alpha means public API compatibility changes remain possible before 1.0, although deliberate changes must be documented and tested.
 
 The project can stage experimental version candidates in separate branches; an open PR is not a published release. Prefer the package's actual `__version__` when reporting problems.
 
