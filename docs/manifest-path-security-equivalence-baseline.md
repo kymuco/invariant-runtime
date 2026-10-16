@@ -2,7 +2,7 @@
 
 ## Motivation and scope
 
-Installed Runplane bootstrap profiling identified the manifest loader as
+Local installed-wheel application bootstrap profiling identified the manifest loader as
 the major warm-start cost. A 15-sample `cProfile` experiment under Windows
 observed about **352 calls to `Path.resolve()`**, 704 Windows
 `nt._getfinalpathname` calls, and 642 `nt.stat` calls during one profiled
@@ -80,7 +80,7 @@ The three file symlink gaps remain real and must be recorded separately.
 - On Windows, case folding and reparse-point semantics can differ from POSIX.
   A Linux-only green run cannot stand in for the Windows gates.
 - A future optimization must not reuse canonical paths across independent
-  `Runplane.create()` calls or plugin edits without an explicit freshness
+  application bootstrap calls or plugin edits without an explicit freshness
   model and its own proof.
 - The test suite is a **contract baseline**, not a complete filesystem
   adversarial model. Reviewers should include UNC paths, device paths,
@@ -88,7 +88,7 @@ The three file symlink gaps remain real and must be recorded separately.
 
 ## Gates
 
-Run in the `kymuco/invariant-runtime` checkout, **not Runplane**:
+Run from the Invariant repository root:
 
 ```powershell
 git rev-parse HEAD

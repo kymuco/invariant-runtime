@@ -2,7 +2,7 @@
 
 ## Hypothesis
 
-Installed Runplane profiling suggests that recursive discovery of manifest
+Installed-application profiling suggests that recursive discovery of manifest
 files costs time, but earlier cProfile cumulative timings are perturbed by
 instrumentation and cannot predict an unprofiled improvement.
 
@@ -28,65 +28,42 @@ symlink skips due to Windows WinError 1314 remain a coverage gap.
 
 `pass=true` in the output means the experiment completed successfully;
 `candidate_eligible=true` means exact sequence equality was observed
-for the installed Runplane plugin roots. Parity on those roots is
+for one private installed-application plugin tree. Parity on that tree is
 necessary but is **not yet sufficient** for production eligibility.
 
 ## Local development gate
 
-In the `W:\dev\invariant-runtime` checkout, after switching to the
-research branch:
+Run from the Invariant repository root in Python 3.11+:
 
 ```powershell
-$python = "W:\dev\hde\runplane\.venv-r2\Scripts\python.exe"
+python -m pytest -q tests/core/test_manifest_enumeration_parity_pilot.py
+python -m pytest -q tests/core/test_manifest_path_security_equivalence.py
+python -m pytest -q tests/core/test_manifest_intra_discovery_mutation_guards.py
+```
+
+Optional format and lint checks, when Ruff is installed:
+
+```powershell
 $files = @(
   "examples/profile_manifest_enumeration.py"
   "tests/core/test_manifest_enumeration_parity_pilot.py"
 )
-& $python -m ruff check $files
-& $python -m ruff format --check $files
-& $python -m pytest tests/core/test_manifest_enumeration_parity_pilot.py -q -rs
-& $python -m pytest tests/core/test_manifest_path_security_equivalence.py -q -rs
-& $python -m pytest tests/core/test_manifest_intra_discovery_mutation_guards.py -q
+python -m ruff check $files
+python -m ruff format --check $files
 ```
 
-## Independent installed-wheel proof
+## Scope of the measured consumer experiment
 
-The benchmark must be copied **outside** the invariant-runtime and
-Runplane source checkouts and run with the existing installed R130
-consumer Python. It uses installed Runplane package metadata to discover
-the real plugin-pack roots and verifies SDK inventory before and after.
+The historical 40-pair timing experiment used an independently installed,
+**private** application with 67 manifests. The private application, its
+installation instructions, inventory and proof artifacts are not published
+here. The timing values below are retained as bounded historical research
+evidence; they cannot be independently reproduced with this repository alone.
 
-```powershell
-$repo = (Get-Location).Path
-$runplane = "W:\dev\hde\runplane"
-$consumerPython = Join-Path $runplane ".dist-check\bound-effect-client-v1-02\consumer-venv\Scripts\python.exe"
-$root = Join-Path $runplane ".dist-check\manifest-enumeration-01"
-if (Test-Path $root) {
-  throw "Use a new proof root; preserve earlier measurements"
-}
-
-$consumer = Join-Path $root "consumer"
-New-Item -ItemType Directory -Path $consumer -Force | Out-Null
-Copy-Item (Join-Path $repo "examples\profile_manifest_enumeration.py") $consumer
-
-Push-Location $consumer
-try {
-  & $consumerPython (Join-Path $consumer "profile_manifest_enumeration.py")  `
-    --proof-root (Join-Path $root "measurements")  `
-    --samples 40
-}
-finally {
-  Pop-Location
-}
-```
-
-Result: `INVARIANT_MANIFEST_ENUMERATION_PILOT_JSON=...` and
-`manifest-enumeration-proof.json` inside the new measurements directory.
-
-The proof includes 40 alternated pairs, raw timing arrays, mean/median/p95,
-exact manifest paths and a before/after plugin/effect inventory SHA256.
-It does **not** profile manifest parsing, path containment, registration
-or effect execution.
+The experiment recorded alternating enumeration timings, exact ordered
+paths, before/after inventory comparison and observed OS-specific casing
+differences. It did **not** profile manifest parsing, path containment,
+registration or application effects.
 
 ## Decision rule
 
@@ -100,18 +77,12 @@ There is no runtime optimization and no speedup claim in this PR.
 
 ## Measured Windows decision — 2026-10-08: NO_GO
 
-The user executed the initial PR #21 research harness on the independently
-installed Runplane R130 wheel and supplied the full JSON proof:
-
-```text
-Runplane .dist-check/manifest-enumeration-01/measurements/manifest-enumeration-proof.json
-```
+A private installed-wheel application was used for the initial PR #21 research measurement. The original proof artifact is not distributed with Invariant.
 
 Environment: Windows 10.0.26300, Python 3.11.9. 40 alternating pairs.
 Result: `pass=true`, `candidate_eligible=true` *for the installed
-67-manifest tree only*, and an unchanged before/after inventory
-(67 plugins, 29 canonical effects, SHA256
-`312409d73f8e1cd4a7b2e6d21f9d8864895bdadf08571d3d89389a8a5e403ff8`).
+67-manifest tree only*, and an unchanged before/after plugin inventory.
+Neither the private inventory nor its checksum is included as a public fixture.
 
 | Measurement | rglob | os.walk |
 | --- | ---: | ---: |
@@ -168,7 +139,7 @@ No changes to `ManifestSource.discover`, `_read_manifest`, or
 
 ### Final-gate correction after initial NO_GO documentation
 
-The user's subsequent run on
+A subsequent local run on
 `231b985ebfcd02956441a6275c9f5e19e1991de6` showed:
 
 - Ruff formatter: **PASS** (2 files formatted);

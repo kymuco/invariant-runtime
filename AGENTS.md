@@ -3,7 +3,7 @@
 This file guides contributors and coding agents working in this repository. The
 canonical project is **Invariant Runtime**, an independent, standard-library-only
 Python plugin runtime. It is infrastructure for applications, not an agent,
-workflow engine, marketplace, approval service, or HDE-specific component.
+workflow engine, marketplace, approval service, or product-specific component.
 
 ## Start with the contracts
 
