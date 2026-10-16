@@ -27,7 +27,19 @@ orders.csv: 2 items, total $30.25 via example:orders-csv
 orders.json: 2 items, total $35.50 via example:orders-json
 ```
 
-The **host** chooses the importer by file extension; Invariant discovers and manages each plugin. Try your own file with `python examples/data_importers/run.py path/to/orders.csv`. You can add a new format via an external plugin directory **without editing the host** ([runnable example](examples/data_importers/README.md)).
+The **host** chooses the importer by file extension; Invariant discovers and manages each plugin. Try your own file with `python examples/data_importers/run.py path/to/orders.csv`.
+
+To see a third format plugged in **without changing the host**, run the included TSV add-on:
+
+```bash
+python examples/data_importers/run.py --plugin-dir examples/data_importers/addons examples/data_importers/samples/orders.tsv
+```
+
+```text
+orders.tsv: 1 item, total $15.00 via example:orders-tsv
+```
+
+[Inspect the complete example](examples/data_importers/README.md) to see its plugin manifests and host-defined interface.
 
 Want the simplest possible plugin? [Build Hello Plugin in three files](docs/getting-started.md). For dependencies and governed resources, try [Capability Notes](examples/capability_notes/README.md).
 

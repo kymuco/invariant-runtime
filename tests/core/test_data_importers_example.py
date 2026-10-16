@@ -27,6 +27,15 @@ def test_default_importers_work_outside_checkout(tmp_path: Path) -> None:
     ]
 
 
+def test_optional_tsv_addon_is_not_loaded_until_requested(tmp_path: Path) -> None:
+    sample = ROOT / "examples" / "data_importers" / "samples" / "orders.tsv"
+    plugins = ROOT / "examples" / "data_importers" / "addons"
+    result = _run("--plugin-dir", str(plugins), str(sample), cwd=tmp_path)
+    assert result.stdout.strip() == (
+        "orders.tsv: 1 item, total $15.00 via example:orders-tsv"
+    )
+
+
 def test_external_importer_needs_no_host_edits(tmp_path: Path) -> None:
     plugin = tmp_path / "plugins" / "tsv"
     plugin.mkdir(parents=True)

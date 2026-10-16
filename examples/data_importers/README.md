@@ -17,6 +17,20 @@ orders.csv: 2 items, total $30.25 via example:orders-csv
 orders.json: 2 items, total $35.50 via example:orders-json
 ```
 
+Try adding the separately discovered TSV importer first, with **no host edits**:
+
+```bash
+python examples/data_importers/run.py --plugin-dir examples/data_importers/addons examples/data_importers/samples/orders.tsv
+```
+
+```text
+orders.tsv: 1 item, total $15.00 via example:orders-tsv
+```
+
+The ready-to-run add-on lives in `addons/tsv/`, outside the standard
+`plugins/` discovery root. It is included to show the extension path; it
+is not loaded by the default two-format demonstration.
+
 Pass an existing CSV/JSON file to use your own data:
 
 ```bash

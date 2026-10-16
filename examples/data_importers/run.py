@@ -24,7 +24,10 @@ def main() -> None:
         help="Additional plugin manifest directory; repeatable"
     )
     args = parser.parse_args()
-    files = args.files or sorted((EXAMPLE_DIR / "samples").glob("orders.*"))
+    files = args.files or [
+        EXAMPLE_DIR / "samples" / "orders.csv",
+        EXAMPLE_DIR / "samples" / "orders.json",
+    ]
 
     service = PluginService.from_manifest_paths(
         [EXAMPLE_DIR / "plugins", *args.plugin_dir]
