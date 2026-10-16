@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "invariant-runtime"
 version = "0.1.0"
-description = "Policy-aware plugin runtime for versioned discovery, dependency resolution, scoped capabilities, and transactional execution."
+description = "A Python runtime for building extensible systems from composable plugins, with explicit control over capabilities and lifecycle."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
