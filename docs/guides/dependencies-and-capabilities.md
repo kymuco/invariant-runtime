@@ -8,7 +8,7 @@ The checked `capability_notes` example demonstrates both mechanisms without expo
 
 ```mermaid
 flowchart LR
-    H["Host policy"] -->|grants or denies| F["fs_sandbox@0.2.0"]
+    H["Host policy"] -->|grants or denies| F["fs_sandbox@0.3.0"]
     N["example:notes@1.0.0"] -->|storage| S["example:notes-storage@1.0.0"]
     S -->|fs| F
 ```
@@ -60,7 +60,7 @@ Its manifest requests the public capability contract by ID and version:
 {
   "dependencies": [
     {
-      "id": "invariant:capability.fs_sandbox@0.2.0",
+      "id": "invariant:capability.fs_sandbox@0.3.0",
       "param": "fs",
       "scope": "EXECUTION",
       "optional": false
@@ -74,7 +74,7 @@ For Python tooling, the same built-in identity is available without repeating th
 ```python
 from invariant.spec import FS_SANDBOX_CAPABILITY
 
-assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.2.0"
+assert FS_SANDBOX_CAPABILITY.ref == "invariant:capability.fs_sandbox@0.3.0"
 ```
 
 The reference names a contract. It is not a permission token and does not grant the capability.
@@ -169,7 +169,7 @@ When the host requests `example:notes`, Invariant:
 
 1. resolves `example:notes@1.0.0`;
 2. resolves its `example:notes-storage@1.0.0` dependency;
-3. resolves `fs_sandbox@0.2.0` through the execution's policy-gated capability view;
+3. resolves `fs_sandbox@0.3.0` through the execution's policy-gated capability view;
 4. stages and initializes the dependency graph in dependency-first order;
 5. commits runtime-owned plugin state only after the activation graph reaches READY;
 6. shuts execution-owned plugins down in reverse order when the context closes.

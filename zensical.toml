@@ -16,6 +16,7 @@ copyright = "Invariant Runtime · Apache-2.0"
 nav = [
   { "Overview" = "index.md" },
   { "Getting started" = "getting-started.md" },
+  { "Use cases" = "use-cases.md" },
   { "Concepts" = [
     { "Runtime model" = "concepts/runtime-model.md" },
   ] },
