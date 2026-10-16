@@ -41,6 +41,7 @@ The plugin class itself uses `invariant.spec`. [Getting started](getting-started
 | Goal | Read |
 | :-- | :-- |
 | Write and run a first plugin | [Getting started](getting-started.md) |
+| Decide where the runtime fits | [Use cases](use-cases.md) |
 | Understand plugins, manifests, service and capabilities | [Runtime model](concepts/runtime-model.md) |
 | Develop a plugin beyond the first example | [Plugin authoring](guides/plugin-authoring.md) |
 | Declare dependencies and governed access | [Dependencies and capabilities](guides/dependencies-and-capabilities.md) |
