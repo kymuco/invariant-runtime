@@ -1,6 +1,6 @@
 [project]
 site_name = "Invariant Runtime"
-site_description = "Policy-aware plugin runtime for Python."
+site_description = "Extensibility, with boundaries: composable Python plugins and governed lifecycle."
 site_author = "kymuco"
 site_url = "https://kymuco.github.io/invariant-runtime/"
 repo_url = "https://github.com/kymuco/invariant-runtime"

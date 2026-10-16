@@ -1,6 +1,6 @@
 # Invariant Runtime
 
-A dependency-free Python runtime for versioned plugins, explicit dependencies, governed capabilities and managed lifecycle. Invariant is a library to embed in an application, not an application framework.
+**Extensibility, with boundaries.** Invariant is an embeddable Python runtime for composing applications from independent, versioned plugins. The runtime manages dependencies, activation and lifecycle; applications keep control of domain behavior, permissions and host resources.
 
 ## Start here
 

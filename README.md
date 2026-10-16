@@ -1,19 +1,21 @@
 # Invariant Runtime
 
-**A dependency-free plugin runtime for Python 3.11+.**
+**Extensibility, with boundaries.**
+
+Build extensible Python applications from independent, composable plugins. Invariant manages discovery, dependencies, activation, and lifecycle, while your application stays in control of its behavior and access to host resources.
 
 [![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat)](https://www.python.org/downloads/)
-[![Status](https://img.shields.io/badge/status-0.1%20alpha-555555?style=flat)](docs/project/status.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-555555?style=flat)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python%203.11%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![0.1 alpha](https://img.shields.io/badge/0.1%20alpha-64748B?style=flat)](docs/project/status.md)
+[![Apache-2.0](https://img.shields.io/badge/Apache--2.0-64748B?style=flat)](LICENSE)
 
-No mandatory third-party runtime dependencies.
-
-Invariant helps Python applications discover, resolve, activate, and manage **versioned plugins**. It handles plugin infrastructure; your application owns the interfaces, behavior, and decisions about what to run.
+No mandatory third-party runtime dependencies. Plugins may use their own packages.
 
 ## Why a plugin runtime?
 
-Direct imports are usually the right choice for a small, fixed collection of modules. Once independently developed extensions need identities, versions, declared dependencies, predictable initialization and cleanup, or host-governed resources, every application would otherwise need to build those mechanisms itself.
+A plugin is more than an imported module or an operation to call: it is an independently maintained component with an identity, dependencies, and a lifetime. Invariant provides the infrastructure to compose and manage these components without baking each implementation into the application.
+
+For a small, fixed set of modules, ordinary Python imports are usually simpler. Invariant becomes useful when plugins evolve independently and need explicit dependency resolution, predictable cleanup, or governed access to host resources.
 
 | Need | What Invariant provides |
 | --- | --- |
