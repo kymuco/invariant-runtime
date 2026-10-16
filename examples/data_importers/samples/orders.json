@@ -1,0 +1,12 @@
+[
+  {
+    "item": "Cable",
+    "quantity": 2,
+    "unit_price": "8.00"
+  },
+  {
+    "item": "Adapter",
+    "quantity": 1,
+    "unit_price": "19.50"
+  }
+]

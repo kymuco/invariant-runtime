@@ -2,7 +2,7 @@
 
 Invariant is infrastructure for embedding independently developed Python components into an application. It is **not** an application framework: hosts decide which behavior to expose, which implementations satisfy application interfaces, and when operations are authorized.
 
-The first two use cases describe architectural possibilities. The third points to an executable example included in this repository.
+The first and third use cases have runnable examples. The modular AI/media scenario is conceptual, not a bundled agent framework.
 
 ## 1. Extensible CLI, desktop app, or service
 
@@ -18,6 +18,8 @@ Application host (chooses application behavior)
 ```
 
 Each handler can be packaged as a versioned plugin with declared dependencies and managed initialization/shutdown. Invariant resolves and manages the components; the application defines the handler interface and chooses which implementation to invoke.
+
+**Try it:** The [data importers example](https://github.com/kymuco/invariant-runtime/tree/main/examples/data_importers) processes CSV and JSON using separate plugins. Run `python examples/data_importers/run.py` and use `--plugin-dir` for an additional independently developed format implementation.
 
 **Why use Invariant?** An independently developed plugin graph has lifecycle and versioning concerns beyond importing Python modules.
 
