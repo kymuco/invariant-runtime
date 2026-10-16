@@ -8,7 +8,7 @@
 
 | Proposed use | Decision | Evidence and qualification |
 | --- | --- | --- |
-| Current 0.1 alpha in a **trusted, pinned** host such as Runplane | **GO within tested scope** | Existing core matrix and independently installed real Runplane consumer proof; product retains responsibility for its own authorization and workflows |
+| Current 0.1 alpha in a **trusted, pinned** host | **GO within tested scope** | Existing core matrix and a separately reported, private installed-wheel consumer proof. Application authorization and workflows remain outside Invariant. This external evidence is not reproducible from this public repository. |
 | Publish the **next** alpha revision with new compatibility/release claims | **CONDITIONAL / NOT YET READY** | Complete the release gates below: release identity and notes, docs parity, fresh CI, installed-wheel smoke and docs build; do not claim completion from this audit |
 | Promise synchronous, verified release of **all resources** whenever `close()` returns | **NO-GO** | Shutdown may be deferred until work finishes; some close exceptions are best-effort logged or swallowed |
 | Publish a stable, public operational lifecycle / telemetry schema | **NO-GO** | The detailed host/supervisor/metrics/tracing modules are internal; logical close and resource drain are not externally distinct stable statuses |
@@ -30,8 +30,8 @@ These decisions concern **different scopes**. A green core suite and valid real 
 
 - GitHub Actions on the audited `main` SHA `e6c7a0b...`: [run 38698111491](https://github.com/kymuco/invariant-runtime/actions/runs/38698111491), **9/9 PASS**: Ubuntu and Windows, Python 3.11–3.14 (8 core jobs), plus installed wheel packaging smoke.
 - Recent lifecycle tests cover `plugin_get` racing rollback/timeout, `RuntimeHost.close()` with in-flight calls and queued cancellation, and exact-one context/service teardown under those controlled scenarios.
-- The real **independent-wheel** Runplane integration probe reported PASS on Windows: Runplane at `8385b348b54901103feab887f453a0ae36daa71f` against Invariant implementation `0f81d09f517390fc2f0ae0a6ccce55eb56316763`. It observed 67 plugins, 29 effects, initialized echo, bounded read-only workspace operations and real RunplaneService-backed host close. This original proof intentionally bypassed Runplane's older pin; its result is **limited to that exact pairing**.
-- Runplane subsequently pinned the merged Invariant implementation `901eec516b2938b4315d8c6f8a041977ec863486` on its own `main` (merge `e8d80396b34cea915eb8734adb3ce211cdd8401b`). Its operator reported the full local pytest gate green following a stale README-contract test correction. Numeric results for that final rerun were not supplied, so do not invent them.
+- A separately installed, privately managed downstream consumer was reported to pass a scoped Windows integration check of plugin discovery, bounded operations and shutdown. Its private source, revision pins and proof artifacts are **not included** in this repository. This is historical integration evidence, not a portable compatibility guarantee or a publicly reproducible test.
+- A later consumer-side compatibility update was reported to pass local tests, but the final test-count report was not supplied. Do not infer unreported counts or generalize that result.
 
 ### Security
 
@@ -67,7 +67,7 @@ Recommendation **P1, separate PR**: if a real downstream consumer needs this dis
 | Gate | State as of audit | Exit evidence required |
 | --- | --- | --- |
 | Explicit public API, errors, versioned capability refs | **Mostly PASS**, reference mismatch fixed in this branch | New docs parity regression + entire core CI green |
-| Runplane compatibility with a pinned trusted consumer | **PASS for proven paths** | Preserve exact SHA/proof scope in release notes; revalidate if actual runtime code changes |
+| Privately tested consumer integration | **Scoped historical PASS** | Independent reproduction is not possible from this repository alone; do not claim general compatibility or repeat unavailable private revision pins |
 | Python 3.11–3.14 / Ubuntu and Windows core CI | **PASS for baseline** | Fresh 9/9 checks on the exact release candidate commit, not on prior `main` |
 | Distribution and installed wheel smoke | **PASS for baseline** | Repeat against exact release commit |
 | Documentation integrity | **Covered partly by core docs contract tests** | Optional docs extra + `zensical build --clean --strict` for release; site build is not part of the current 9-job CI workflow |

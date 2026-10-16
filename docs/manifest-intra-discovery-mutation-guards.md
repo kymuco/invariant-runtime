@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-Runplane's installed-wheel profiling isolated Windows path canonicalization
+Local installed-wheel profiling isolated Windows path canonicalization
 inside `invariant-runtime` manifest discovery as a significant warm-start
 cost. A tempting change would skip the second calls to `Path.resolve()`
 inside `ManifestSource._ensure_under_root` because the caller already
@@ -70,16 +70,15 @@ missing roots before it is eligible for a runtime PR.
 Run in the `invariant-runtime` checkout:
 
 ```powershell
-$python = "W:\dev\hde\runplane\.venv-r2\Scripts\python.exe"
 $file = "tests/core/test_manifest_intra_discovery_mutation_guards.py"
 
-& $python -m ruff check $file
-& $python -m ruff format --check $file
-& $python -m pytest $file -q
-
-& $python -m pytest tests/core/test_manifest_path_security_equivalence.py -q -rs
-& $python -m pytest tests/core/test_public_plugin_inventory.py -q
+python -m pytest $file -q
+python -m pytest tests/core/test_manifest_path_security_equivalence.py -q -rs
+python -m pytest tests/core/test_public_plugin_inventory.py -q
 ```
+
+If Ruff is installed, also run `python -m ruff check $file` and
+`python -m ruff format --check $file`.
 
 This is a tests/documentation-only pull request. No performance
 speedup or production security improvement is claimed.
