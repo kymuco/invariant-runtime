@@ -59,3 +59,5 @@ jobs:
           cd /tmp
           "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -c "from invariant.spec.versioning import Version, canon_version_key; from invariant.catalog.registry import PluginRegistry; assert Version('1.0rc1') < Version('1.0'); assert canon_version_key('1.2') == '1.2.0'; print('INVARIANT_WHEEL_OK')"
           "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/tools/verify_installed_alpha_candidate.py"
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/examples/data_importers/run.py"
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/examples/data_importers/run.py" --plugin-dir "$GITHUB_WORKSPACE/examples/data_importers/addons" "$GITHUB_WORKSPACE/examples/data_importers/samples/orders.tsv"
