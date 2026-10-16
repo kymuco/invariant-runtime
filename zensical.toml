@@ -32,6 +32,7 @@ nav = [
   { "Security" = "security.md" },
   { "Project" = [
     { "Status and limitations" = "project/status.md" },
+    { "Alpha candidate 0.1.1a1" = "alpha-candidate-0.1.1a1.md" },
     { "Contributing" = "project/contributing.md" },
     { "Core architecture" = "core.md" },
     { "Documentation standard" = "STYLE.md" },
