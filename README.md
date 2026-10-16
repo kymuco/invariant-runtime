@@ -3,8 +3,10 @@
 **A dependency-free plugin runtime for Python 3.11+.**
 
 [![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat)](https://www.python.org/downloads/)
+[![Status](https://img.shields.io/badge/status-0.1%20alpha-555555?style=flat)](docs/project/status.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-555555?style=flat)](LICENSE)
 
-Python 3.11+ · 0.1 alpha · Apache-2.0  
 No mandatory third-party runtime dependencies.
 
 Invariant helps Python applications discover, resolve, activate, and manage **versioned plugins**. It handles plugin infrastructure; your application owns the interfaces, behavior, and decisions about what to run.
