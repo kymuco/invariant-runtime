@@ -93,7 +93,8 @@ def test_documentation_home_is_a_product_front_door() -> None:
     assert home.startswith("# Invariant Runtime")
     assert "## Start here" in home
     assert "## Documentation by task" in home
-    assert "Hello, Invariant!" in home
+    assert "orders.csv: 2 items, total $30.25" in home
+    assert "python examples/data_importers/run.py" in home
     assert "not a hostile-code sandbox" in home
     assert "python -m pip install ." in home
 

@@ -4,20 +4,23 @@
 
 ## Start here
 
-[Getting started](getting-started.md) walks through a complete plugin class, manifest and host.
-
-From a source checkout with Python 3.11+:
+Run a small order-importer application first. Two versioned plugins parse CSV and JSON, and the host chooses the implementation:
 
 ```bash
+git clone https://github.com/kymuco/invariant-runtime.git
+cd invariant-runtime
 python -m pip install .
-python examples/hello_plugin/run.py
+python examples/data_importers/run.py
 ```
 
 Expected output:
 
 ```text
-Hello, Invariant!
+orders.csv: 2 items, total $30.25 via example:orders-csv
+orders.json: 2 items, total $35.50 via example:orders-json
 ```
+
+For the smallest plugin built step by step, follow [Getting started](getting-started.md). The [full runnable example](https://github.com/kymuco/invariant-runtime/tree/main/examples/data_importers) shows how to add new formats without modifying the host.
 
 ## Embed the runtime
 
@@ -26,15 +29,16 @@ Application code uses `invariant.api`:
 ```python
 from invariant.api import PluginService
 
-service = PluginService.from_manifest_paths(["plugins"])
+service = PluginService.from_manifest_paths(["examples/data_importers/plugins"])
 try:
-    plugin = service.get("example:hello")
-    print(plugin.greet("Invariant"))
+    importer = service.get("example:orders-csv")
+    orders = importer.load("examples/data_importers/samples/orders.csv")
+    print(len(orders))
 finally:
     service.close()
 ```
 
-The plugin class itself uses `invariant.spec`. [Getting started](getting-started.md) includes the files needed to make this example run; do not copy the host snippet without creating the matching manifest.
+This snippet works from the checkout root after installation. Plugins import from `invariant.spec`; [Getting started](getting-started.md) explains the class and manifest.
 
 ## Documentation by task
 

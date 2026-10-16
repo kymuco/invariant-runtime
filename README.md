@@ -11,6 +11,26 @@ Build extensible Python applications from independent, composable plugins. Invar
 
 No mandatory third-party runtime dependencies. Plugins may use their own packages.
 
+## Quick start
+
+Run a small application that imports order data through two independently versioned plugins:
+
+```bash
+git clone https://github.com/kymuco/invariant-runtime.git
+cd invariant-runtime
+python -m pip install .
+python examples/data_importers/run.py
+```
+
+```text
+orders.csv: 2 items, total $30.25 via example:orders-csv
+orders.json: 2 items, total $35.50 via example:orders-json
+```
+
+The **host** chooses the importer by file extension; Invariant discovers and manages each plugin. Try your own file with `python examples/data_importers/run.py path/to/orders.csv`. You can add a new format via an external plugin directory **without editing the host** ([runnable example](examples/data_importers/README.md)).
+
+Want the simplest possible plugin? [Build Hello Plugin in three files](docs/getting-started.md). For dependencies and governed resources, try [Capability Notes](examples/capability_notes/README.md).
+
 ## Why a plugin runtime?
 
 A plugin is more than an imported module or an operation to call: it is an independently maintained component with an identity, dependencies, and a lifetime. Invariant provides the infrastructure to compose and manage these components without baking each implementation into the application.
@@ -32,39 +52,24 @@ For a small, fixed set of modules, ordinary Python imports are usually simpler. 
 
 These are architectural examples, not bundled applications or promises of automatic implementation switching. See [Use cases](docs/use-cases.md) for the boundaries of each scenario.
 
-## Quick start
+## The host stays small
 
-From a source checkout (no package-registry release required):
-
-```bash
-git clone https://github.com/kymuco/invariant-runtime.git
-cd invariant-runtime
-python -m pip install .
-python examples/hello_plugin/run.py
-```
-
-Expected output:
-
-```text
-Hello, Invariant!
-```
-
-The checked example uses the public host API:
+The host uses the public API to select a plugin; the plugin's behavior remains ordinary Python:
 
 ```python
 from invariant.api import PluginService
 
-service = PluginService.from_manifest_paths(["examples"])
+service = PluginService.from_manifest_paths(["examples/data_importers/plugins"])
 try:
-    hello = service.get("example:hello")
-    print(hello.greet("Invariant"))
+    importer = service.get("example:orders-csv")
+    orders = importer.load("examples/data_importers/samples/orders.csv")
 finally:
     service.close()
 ```
 
-[Getting started](docs/getting-started.md) shows the matching plugin class and manifest. Plugin authors use `invariant.spec`; hosts use `invariant.api`.
+[Getting started](docs/getting-started.md) explains the class and manifest step by step.
 
-## Beyond Hello World
+## Dependencies and governed resources
 
 The existing [capability_notes example](examples/capability_notes/README.md) contains a real dependency graph:
 
