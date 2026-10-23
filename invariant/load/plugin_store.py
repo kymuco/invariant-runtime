@@ -398,6 +398,36 @@ class LocalPluginStore:
             with self._lock:
                 lease.unlink(missing_ok=True)
 
+    @contextmanager
+    def open_service(
+        self,
+        *,
+        include_unstable: bool = False,
+        fail_fast: bool = True,
+        tracer: object | None = None,
+    ) -> Iterator["PluginService"]:
+        """Use a normal PluginService while this Store pins its plugin files.
+
+        The lease precedes discovery, survives until after service.close(),
+        and is released if construction or plugin activation fails. Hosts must
+        close execution contexts before leaving this block. This cannot
+        account for a service deliberately used after the block exits or for
+        other callers using unleased plugin_roots().
+        """
+        from invariant.api import PluginService
+
+        with self.leased_plugin_roots() as paths:
+            service = PluginService.from_manifest_paths(
+                paths,
+                include_unstable=include_unstable,
+                fail_fast=fail_fast,
+                tracer=tracer,
+            )
+            try:
+                yield service
+            finally:
+                service.close()
+
     def _pinned_digests(self) -> set[str]:
         """Unknown/corrupt leases fail closed; none expire automatically."""
         pinned: set[str] = set()
