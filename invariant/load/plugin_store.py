@@ -437,6 +437,13 @@ class LocalPluginStore:
                 if candidate.name not in keep:
                     self._verify_object(candidate.name)
                     removable.append(candidate)
+            # Preflight *all* orphaned objects before mutating permissions:
+            # chmod on a multiply-linked file would also change its external
+            # hardlink target, even though the bytes match our receipt.
+            for candidate in removable:
+                for child in candidate.rglob("*"):
+                    if child.is_file() and not child.is_symlink() and child.stat().st_nlink != 1:
+                        raise PluginStoreError("hardlinked object file; refusing pruning")
             for candidate in removable:
                 # Installed artifacts are read-only. Windows needs writable file
                 # attributes before rmtree; no objects are removed while pinned.

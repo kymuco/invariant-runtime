@@ -504,3 +504,22 @@ with LocalPluginStore(Path(sys.argv[1])).leased_plugin_roots() as paths:
             out, err = process.communicate(timeout=15)
     assert process.returncode == 0, err
     assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+
+def test_prune_rejects_external_hardlinks_without_changing_permissions(tmp_path):
+    import stat as statmod
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    obj = store.plugin_roots()[0]
+    external = tmp_path / 'external-copy.py'
+    try:
+        os.link(obj / 'plugin.py', external)
+    except (OSError, NotImplementedError):
+        pytest.skip('Filesystem does not permit hardlinks')
+    before = statmod.S_IMODE(external.stat().st_mode)
+    store.uninstall_root('lab:core@1.0.0')
+    with pytest.raises(StoreError, match='hardlinked object file'):
+        store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)
+    assert statmod.S_IMODE(external.stat().st_mode) == before
+    assert (obj / 'plugin.py').is_file()
+    assert external.read_bytes() == (obj / 'plugin.py').read_bytes()
