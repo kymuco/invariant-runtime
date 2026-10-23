@@ -18,9 +18,9 @@ Read [Public API](../reference/public-api.md), [Manifest v1](../reference/manife
 
 ## Compatibility status
 
-**The published-source baseline is 0.1.0 alpha; this branch stages an unpublished 0.1.1a1 candidate.** Alpha means public API compatibility changes remain possible before 1.0, although deliberate changes must be documented and tested.
+**This source tree identifies the package version as `0.1.1a1` (alpha).** A source version, pull request, or CI artifact is not itself a GitHub tag/Release or a PyPI publication. Check the repository Releases page and package index separately for actual distribution availability.
 
-The project can stage experimental version candidates in separate branches; an open PR is not a published release. Prefer the package's actual `__version__` when reporting problems.
+Alpha means public API compatibility changes remain possible before 1.0, although deliberate changes must be documented and tested. Prefer the installed package's actual `__version__` when reporting problems.
 
 `invariant.load`, `invariant.catalog`, `invariant.exec`, and `invariant.ops` are implementation-level modules and not part of the explicit public 0.1 facade.
 

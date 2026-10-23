@@ -27,14 +27,22 @@ def test_candidate_version_matches_installed_distribution_and_readme() -> None:
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "badge/0.1.1a1%20alpha" in readme
-    assert "This branch stages 0.1.1a1 as an unpublished alpha candidate" in readme
+    assert "This branch stages" not in readme
 
     notes = (
         ROOT / "docs" / "alpha-candidate-0.1.1a1.md"
     ).read_text(encoding="utf-8")
-    assert "NOT TAGGED, RELEASED, OR PUBLISHED" in notes
+    assert "Release preparation record" in notes
+    assert "SHA256SUMS" in notes
     assert "0.1.1a1" in notes
     assert "invariant:capability.process@0.2.0" in notes
+
+    status = (ROOT / "docs" / "project" / "status.md").read_text(encoding="utf-8")
+    assert "source tree identifies the package version as `0.1.1a1`" in status
+
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "actions/upload-artifact@v4" in workflow
+    assert "sha256sum --check SHA256SUMS" in workflow
 
 
 def test_isolated_wheel_smoke_script_remains_valid_python() -> None:
