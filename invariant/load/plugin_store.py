@@ -49,6 +49,11 @@ class _Candidate:
     files: tuple[tuple[str, str], ...]
 
 
+@dataclass
+class _LeaseControl:
+    keep_on_exit: bool = False
+
+
 def _reference(ref: str) -> str:
     if not isinstance(ref, str):
         raise PluginStoreError("plugin reference must be a string")
@@ -369,7 +374,7 @@ class LocalPluginStore:
             return state
 
     @contextmanager
-    def leased_plugin_roots(self) -> Iterator[list[Path]]:
+    def leased_plugin_roots(self, *, _control: _LeaseControl | None = None) -> Iterator[list[Path]]:
         """Hold a durable consumer lease for paths during an entire host session.
 
         A crashed process leaves a lease behind and blocks reclamation until
@@ -396,7 +401,53 @@ class LocalPluginStore:
             yield paths
         finally:
             with self._lock:
-                lease.unlink(missing_ok=True)
+                if _control is None or not _control.keep_on_exit:
+                    lease.unlink(missing_ok=True)
+
+    @contextmanager
+    def open_service(
+        self,
+        *,
+        include_unstable: bool = False,
+        fail_fast: bool = True,
+        tracer: object | None = None,
+    ) -> Iterator["PluginService"]:
+        """Use a normal PluginService while this Store pins its plugin files.
+
+        The lease precedes discovery, survives until after service.close(),
+        and is released if construction or plugin activation fails. Managed
+        plugins are shut down in reverse activation order before release.
+        Failed shutdown preserves the lease for operator recovery. Hosts must
+        close execution contexts before leaving this block. This cannot
+        account for a service deliberately used after the block exits or for
+        other callers using unleased plugin_roots().
+        """
+        from invariant.api import PluginService
+
+        control = _LeaseControl()
+        with self.leased_plugin_roots(_control=control) as paths:
+            service = PluginService.from_manifest_paths(
+                paths,
+                include_unstable=include_unstable,
+                fail_fast=fail_fast,
+                tracer=tracer,
+            )
+            try:
+                yield service
+            finally:
+                try:
+                    # PluginService.close() deliberately leaves managed
+                    # instances in the registry. This Store owns this service,
+                    # so explicitly stop them in reverse activation order.
+                    runtime = service._managed_runtime
+                    for ref in reversed(tuple(runtime._initialization_order)):
+                        service.shutdown(ref)
+                    service.close()
+                except BaseException:
+                    # A failed stop cannot justify reclaiming plugin files.
+                    # Keep the durable lease for explicit operator recovery.
+                    control.keep_on_exit = True
+                    raise
 
     def _pinned_digests(self) -> set[str]:
         """Unknown/corrupt leases fail closed; none expire automatically."""

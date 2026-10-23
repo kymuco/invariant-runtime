@@ -523,3 +523,144 @@ def test_prune_rejects_external_hardlinks_without_changing_permissions(tmp_path)
     assert statmod.S_IMODE(external.stat().st_mode) == before
     assert (obj / 'plugin.py').is_file()
     assert external.read_bytes() == (obj / 'plugin.py').read_bytes()
+
+
+def test_open_service_automatically_leases_until_host_shutdown(tmp_path):
+    core, voice, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    with store.open_service() as service:
+        assert len(list(store.leases.iterdir())) == 1
+        assert service.get('lab:voice-a@1.0.0').use() == 1
+        store.uninstall_root('lab:voice-a@1.0.0')
+        assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+        assert service.get('lab:voice-a@1.0.0').use() == 2
+    assert list(store.leases.iterdir()) == []
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 2
+
+
+def test_open_service_construct_failure_releases_lease(tmp_path, monkeypatch):
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    def raise_during_discover(*args, **kwargs):
+        assert len(list(store.leases.iterdir())) == 1
+        raise RuntimeError('discovery failed')
+    monkeypatch.setattr(PluginService, 'from_manifest_paths', raise_during_discover)
+    with pytest.raises(RuntimeError, match='discovery failed'):
+        with store.open_service():
+            pytest.fail('should not reach service body')
+    assert list(store.leases.iterdir()) == []
+
+
+def test_open_service_user_exception_still_closes_before_releasing_lease(tmp_path, monkeypatch):
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    closed_with_lease = []
+    original_close = PluginService.close
+    def verify_close(self):
+        closed_with_lease.append(len(list(store.leases.iterdir())) == 1)
+        return original_close(self)
+    monkeypatch.setattr(PluginService, 'close', verify_close)
+    with pytest.raises(RuntimeError, match='host failed'):
+        with store.open_service() as service:
+            assert service.get('lab:core@1.0.0').call() == 1
+            raise RuntimeError('host failed')
+    assert closed_with_lease == [True]
+    assert list(store.leases.iterdir()) == []
+
+
+def test_open_service_parallel_sessions_keep_independent_leases(tmp_path):
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    with store.open_service() as first:
+        with store.open_service() as second:
+            assert len(list(store.leases.iterdir())) == 2
+            assert first.get('lab:core@1.0.0').call() == 1
+            assert second.get('lab:core@1.0.0').call() == 1
+            store.uninstall_root('lab:core@1.0.0')
+        assert len(list(store.leases.iterdir())) == 1
+        assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+
+
+def test_open_service_empty_catalog_releases_lease(tmp_path):
+    store = LocalPluginStore(tmp_path / 'store')
+    with pytest.raises(ValueError, match='search_paths'):
+        with store.open_service():
+            pytest.fail('no service for empty store')
+    assert list(store.leases.iterdir()) == []
+
+
+def test_open_service_lease_blocks_prune_from_second_process(tmp_path):
+    import subprocess
+    import sys
+    core, _, _ = fixtures(tmp_path)
+    home = tmp_path / 'store'
+    store = LocalPluginStore(home)
+    store.install([core], roots=['lab:core@1.0.0'])
+    child = '''import sys
+from pathlib import Path
+from invariant.load.plugin_store import LocalPluginStore
+with LocalPluginStore(Path(sys.argv[1])).open_service() as service:
+    assert service.get('lab:core@1.0.0').call() == 1
+    print('READY', flush=True)
+    sys.stdin.readline()
+'''
+    env = dict(os.environ)
+    env['PYTHONPATH'] = os.pathsep.join(sys.path)
+    process = subprocess.Popen(
+        [sys.executable, '-c', child, str(home)], env=env,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout.readline().strip() == 'READY'
+        store.uninstall_root('lab:core@1.0.0')
+        assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+    finally:
+        if process.poll() is None:
+            _, err = process.communicate(input='CLOSE\n', timeout=15)
+        else:
+            _, err = process.communicate(timeout=15)
+    assert process.returncode == 0, err
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+
+
+def test_open_service_shuts_down_managed_plugins_reverse_order_before_release(tmp_path):
+    events = tmp_path / 'stops.txt'
+    core_code = CORE_PY.replace('def shutdown(self): pass',
+                                'def shutdown(self):\n        from pathlib import Path\n'
+                                f'        with Path({str(events)!r}).open("a") as f: f.write("core\\n")')
+    voice_code = VOICE_PY.replace('def shutdown(self): pass',
+                                  'def shutdown(self):\n        from pathlib import Path\n'
+                                  f'        with Path({str(events)!r}).open("a") as f: f.write("voice\\n")')
+    root = tmp_path / 'sources'
+    core = package(root, 'lab:core', '1.0.0', payload=core_code)
+    voice = package(root, 'lab:voice-a', '1.0.0',
+                    deps=['lab:core@1.0.0'], payload=voice_code)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    with store.open_service() as service:
+        assert service.get('lab:voice-a@1.0.0').use() == 1
+        assert not events.exists()
+    assert events.read_text(encoding='utf-8').splitlines() == ['voice', 'core']
+    assert list(store.leases.iterdir()) == []
+
+
+def test_open_service_shutdown_failure_preserves_durable_lease(tmp_path):
+    root = tmp_path / 'sources'
+    fails = CORE_PY.replace('def shutdown(self): pass',
+                            'def shutdown(self): raise RuntimeError("stop failed")')
+    core = package(root, 'lab:core', '1.0.0', payload=fails)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    with pytest.raises(RuntimeError, match='stop failed'):
+        with store.open_service() as service:
+            assert service.get('lab:core@1.0.0').call() == 1
+    pinned = sorted(store.leases.iterdir())
+    assert len(pinned) == 1  # A failed shutdown cannot release protection.
+    store.uninstall_root('lab:core@1.0.0')
+    assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
