@@ -12,14 +12,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import re
 import shutil
 import stat
 import tempfile
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Iterable, Iterator
 
 from invariant.load.env.lock import FileLock
 from invariant.load.sources.manifest import ManifestSource
@@ -187,8 +189,9 @@ class LocalPluginStore:
         self.home = Path(home).resolve()
         self.objects = self.home / "objects"
         self.staging = self.home / ".staging"
+        self.leases = self.home / ".leases"
         self.catalog = self.home / "catalog.json"
-        for path in (self.home, self.objects, self.staging):
+        for path in (self.home, self.objects, self.staging, self.leases):
             path.mkdir(parents=True, exist_ok=True)
         self._lock = FileLock(self.home / ".store.lock", stale_after_s=3600)
 
@@ -364,3 +367,81 @@ class LocalPluginStore:
                      "plugins": {r: state["plugins"][r] for r in sorted(reachable)}}
             _write_json_atomic(self.catalog, state)
             return state
+
+    @contextmanager
+    def leased_plugin_roots(self) -> Iterator[list[Path]]:
+        """Hold a durable consumer lease for paths during an entire host session.
+
+        A crashed process leaves a lease behind and blocks reclamation until
+        an administrator has separately verified that consumer is gone.
+        Merely calling plugin_roots() does NOT acquire a lease.
+        """
+        token = secrets.token_hex(16)
+        lease = self.leases / f"{token}.json"
+        with self._lock:
+            state = self._read_state()
+            self._manifests(state["plugins"])
+            digests = sorted(set(state["plugins"].values()))
+            file_handle = os.open(lease, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            try:
+                with os.fdopen(file_handle, "w", encoding="utf-8") as stream:
+                    json.dump({"schema": 1, "digests": digests}, stream, sort_keys=True)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except BaseException:
+                lease.unlink(missing_ok=True)
+                raise
+            paths = [self.objects / digest for digest in digests]
+        try:
+            yield paths
+        finally:
+            with self._lock:
+                lease.unlink(missing_ok=True)
+
+    def _pinned_digests(self) -> set[str]:
+        """Unknown/corrupt leases fail closed; none expire automatically."""
+        pinned: set[str] = set()
+        for lease in self.leases.iterdir():
+            if (lease.is_symlink() or not lease.is_file()
+                    or not lease.name.endswith(".json")):
+                raise PluginStoreError("invalid consumer lease entry")
+            try:
+                data = json.loads(lease.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise PluginStoreError("unreadable consumer lease") from exc
+            if (not isinstance(data, dict) or data.get("schema") != 1
+                    or not isinstance(data.get("digests"), list)
+                    or any(not isinstance(v, str) or not _SHA256.fullmatch(v)
+                           for v in data["digests"])):
+                raise PluginStoreError("invalid consumer lease data")
+            pinned.update(data["digests"])
+        return pinned
+
+    def prune_unreferenced(self, *, confirmed_untracked_consumers_stopped: bool = False) -> list[str]:
+        """Manual-only physical GC; never infer safety from catalog state alone.
+
+        The caller must independently confirm that no host is using bare
+        plugin_roots() paths without a lease. Active leases always prevent
+        deletion regardless of this confirmation. No TTL or PID heuristics.
+        """
+        if not confirmed_untracked_consumers_stopped:
+            raise PluginStoreError("untracked consumers must be confirmed stopped before pruning")
+        with self._lock:
+            state = self._read_state()
+            keep = set(state["plugins"].values()) | self._pinned_digests()
+            removable: list[Path] = []
+            for candidate in self.objects.iterdir():
+                if (candidate.is_symlink() or not candidate.is_dir()
+                        or not _SHA256.fullmatch(candidate.name)):
+                    raise PluginStoreError("unexpected object directory entry; refusing pruning")
+                if candidate.name not in keep:
+                    self._verify_object(candidate.name)
+                    removable.append(candidate)
+            for candidate in removable:
+                # Installed artifacts are read-only. Windows needs writable file
+                # attributes before rmtree; no objects are removed while pinned.
+                for child in candidate.rglob("*"):
+                    if child.is_file() and not child.is_symlink():
+                        child.chmod(stat.S_IREAD | stat.S_IWRITE)
+                shutil.rmtree(candidate)
+            return [candidate.name for candidate in removable]

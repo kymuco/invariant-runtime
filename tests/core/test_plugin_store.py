@@ -404,3 +404,103 @@ def test_receipt_path_casefold_alias_rejected(tmp_path, reserved):
         store.install([evil], roots=['lab:core@1.0.0'])
     assert store.state()['plugins'] == {}
     assert list(store.objects.iterdir()) == []
+
+
+def test_active_lease_prevents_physical_prune_even_after_uninstall(tmp_path):
+    core, voice, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    with store.leased_plugin_roots() as paths:
+        assert len(paths) == 2
+        service = PluginService.from_manifest_paths(paths)
+        try:
+            assert service.get('lab:voice-a@1.0.0').use() == 1
+            store.uninstall_root('lab:voice-a@1.0.0')
+            with pytest.raises(StoreError, match='untracked consumers'):
+                store.prune_unreferenced()
+            assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+            assert service.get('lab:voice-a@1.0.0').use() == 2
+        finally:
+            service.close()
+    removed = store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)
+    assert len(removed) == 2
+    assert list(store.objects.iterdir()) == []
+
+
+def test_prune_preserves_installed_object_and_only_collects_orphans(tmp_path):
+    core, voice, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    store.uninstall_root('lab:voice-a@1.0.0')
+    store.install([core], roots=['lab:core@1.0.0'])
+    assert set(store.state()['plugins']) == {'lab:core@1.0.0'}
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+    assert len(store.plugin_roots()) == 1
+    assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+
+
+def test_invalid_lease_fails_closed(tmp_path):
+    core, voice, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    store.uninstall_root('lab:voice-a@1.0.0')
+    bad = store.leases / 'broken.json'
+    bad.write_text('not json', encoding='utf-8')
+    with pytest.raises(StoreError, match='unreadable consumer lease'):
+        store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)
+    assert len(list(store.objects.iterdir())) == 2
+    bad.unlink()
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 2
+
+
+def test_crashed_consumer_lease_never_expires_implicitly(tmp_path):
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    try:
+        with store.leased_plugin_roots() as roots:
+            assert len(roots) == 1
+            pinned = sorted(store.leases.iterdir())
+            assert len(pinned) == 1
+            saved = pinned[0].read_bytes()
+    finally:
+        pass
+    pinned[0].write_bytes(saved)
+    store.uninstall_root('lab:core@1.0.0')
+    assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+    pinned[0].unlink()
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+
+
+def test_cross_process_lease_blocks_gc(tmp_path):
+    import subprocess
+    import sys
+    core, _, _ = fixtures(tmp_path)
+    home = tmp_path / 'store'
+    store = LocalPluginStore(home)
+    store.install([core], roots=['lab:core@1.0.0'])
+    code = """import sys
+from pathlib import Path
+from invariant.load.plugin_store import LocalPluginStore
+with LocalPluginStore(Path(sys.argv[1])).leased_plugin_roots() as paths:
+    print('READY', flush=True)
+    sys.stdin.readline()
+"""
+    env = dict(os.environ)
+    env['PYTHONPATH'] = os.pathsep.join(sys.path)
+    process = subprocess.Popen(
+        [sys.executable, '-c', code, str(home)], env=env,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert process.stdout.readline().strip() == 'READY'
+        store.uninstall_root('lab:core@1.0.0')
+        assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+    finally:
+        if process.poll() is None:
+            out, err = process.communicate(input='CLOSE\\n', timeout=15)
+        else:
+            out, err = process.communicate(timeout=15)
+    assert process.returncode == 0, err
+    assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
