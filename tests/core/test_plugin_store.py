@@ -352,6 +352,7 @@ def test_symlinked_object_file_refused(tmp_path):
     original = root / 'plugin.py'
     saved = tmp_path / 'external.py'
     saved.write_bytes(original.read_bytes())
+    original.chmod(0o644)  # Clear Windows read-only attribute before tampering.
     original.unlink()
     try:
         original.symlink_to(saved)
