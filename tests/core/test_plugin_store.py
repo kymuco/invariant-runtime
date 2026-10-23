@@ -499,7 +499,7 @@ with LocalPluginStore(Path(sys.argv[1])).leased_plugin_roots() as paths:
         assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
     finally:
         if process.poll() is None:
-            out, err = process.communicate(input='CLOSE\\n', timeout=15)
+            out, err = process.communicate(input='CLOSE\n', timeout=15)
         else:
             out, err = process.communicate(timeout=15)
     assert process.returncode == 0, err
