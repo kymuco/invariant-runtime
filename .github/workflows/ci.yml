@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -38,6 +40,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -58,3 +62,32 @@ jobs:
         run: |
           cd /tmp
           "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -c "from invariant.spec.versioning import Version, canon_version_key; from invariant.catalog.registry import PluginRegistry; assert Version('1.0rc1') < Version('1.0'); assert canon_version_key('1.2') == '1.2.0'; print('INVARIANT_WHEEL_OK')"
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/tools/verify_installed_alpha_candidate.py"
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/examples/data_importers/run.py"
+          "$GITHUB_WORKSPACE/.wheel-smoke/bin/python" -I "$GITHUB_WORKSPACE/examples/data_importers/run.py" --plugin-dir "$GITHUB_WORKSPACE/examples/data_importers/addons" "$GITHUB_WORKSPACE/examples/data_importers/samples/orders.tsv"
+      - name: Verify exact package source revision
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "INVARIANT_ALPHA_SOURCE_SHA=$(git rev-parse HEAD)"
+
+      - name: Record and verify distribution SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          test "$(find . -maxdepth 1 -type f -name '*.whl' | wc -l)" -eq 1
+          test "$(find . -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 1
+          sha256sum ./*.whl ./*.tar.gz > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload verified alpha distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: invariant-runtime-0.1.1a1-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
