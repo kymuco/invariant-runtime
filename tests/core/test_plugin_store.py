@@ -622,7 +622,7 @@ with LocalPluginStore(Path(sys.argv[1])).open_service() as service:
         assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
     finally:
         if process.poll() is None:
-            _, err = process.communicate(input='CLOSE\\n', timeout=15)
+            _, err = process.communicate(input='CLOSE\n', timeout=15)
         else:
             _, err = process.communicate(timeout=15)
     assert process.returncode == 0, err
