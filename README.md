@@ -13,14 +13,24 @@ No mandatory third-party runtime dependencies. Plugins may use their own package
 
 ## Quick start
 
-Run a small application that imports order data through two independently versioned plugins:
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) with Python 3.11+:
+
+```bash
+python -m pip install invariant-runtime==0.1.1a1
+python -c "import invariant; print(invariant.__version__)"
+```
+
+The version pin explicitly selects the alpha release. You do **not** need to clone this repository to use Invariant in your own application.
+
+To run the included example application, clone the repository for its example files (the runtime remains installed from PyPI):
 
 ```bash
 git clone https://github.com/kymuco/invariant-runtime.git
 cd invariant-runtime
-python -m pip install .
 python examples/data_importers/run.py
 ```
+
+The example imports order data through two independently versioned plugins.
 
 ```text
 orders.csv: 2 items, total $30.25 via example:orders-csv
