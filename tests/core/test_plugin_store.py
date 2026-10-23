@@ -627,3 +627,40 @@ with LocalPluginStore(Path(sys.argv[1])).open_service() as service:
             _, err = process.communicate(timeout=15)
     assert process.returncode == 0, err
     assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
+
+
+def test_open_service_shuts_down_managed_plugins_reverse_order_before_release(tmp_path):
+    events = tmp_path / 'stops.txt'
+    core_code = CORE_PY.replace('def shutdown(self): pass',
+                                'def shutdown(self):\n        from pathlib import Path\n'
+                                f'        with Path({str(events)!r}).open("a") as f: f.write("core\\n")')
+    voice_code = VOICE_PY.replace('def shutdown(self): pass',
+                                  'def shutdown(self):\n        from pathlib import Path\n'
+                                  f'        with Path({str(events)!r}).open("a") as f: f.write("voice\\n")')
+    root = tmp_path / 'sources'
+    core = package(root, 'lab:core', '1.0.0', payload=core_code)
+    voice = package(root, 'lab:voice-a', '1.0.0',
+                    deps=['lab:core@1.0.0'], payload=voice_code)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    with store.open_service() as service:
+        assert service.get('lab:voice-a@1.0.0').use() == 1
+        assert not events.exists()
+    assert events.read_text(encoding='utf-8').splitlines() == ['voice', 'core']
+    assert list(store.leases.iterdir()) == []
+
+
+def test_open_service_shutdown_failure_preserves_durable_lease(tmp_path):
+    root = tmp_path / 'sources'
+    fails = CORE_PY.replace('def shutdown(self): pass',
+                            'def shutdown(self): raise RuntimeError("stop failed")')
+    core = package(root, 'lab:core', '1.0.0', payload=fails)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core], roots=['lab:core@1.0.0'])
+    with pytest.raises(RuntimeError, match='stop failed'):
+        with store.open_service() as service:
+            assert service.get('lab:core@1.0.0').call() == 1
+    pinned = sorted(store.leases.iterdir())
+    assert len(pinned) == 1  # A failed shutdown cannot release protection.
+    store.uninstall_root('lab:core@1.0.0')
+    assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
