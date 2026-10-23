@@ -1,0 +1,102 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub prerelease tag to publish
+        type: string
+        required: true
+        default: v0.1.1a1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify GitHub Release distributions
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify published tag and package version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(a[0-9]+|b[0-9]+|rc[0-9]+)?$ ]]
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          tag_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$tag_sha" HEAD
+          gh release view "$RELEASE_TAG" --json tagName,isDraft,isPrerelease \
+            | jq -e --arg tag "$RELEASE_TAG" '.tagName == $tag and .isDraft == false and .isPrerelease == true'
+          version="$(git show "$tag_sha:pyproject.toml" | python3 -c 'import sys,tomllib; print(tomllib.loads(sys.stdin.read())["project"]["version"])')"
+          test "v$version" = "$RELEASE_TAG"
+          echo "INVARIANT_PYPI_SOURCE_SHA=$tag_sha"
+
+      - name: Download and verify published distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --dir dist \
+            --pattern '*.whl' --pattern '*.tar.gz' --pattern 'SHA256SUMS'
+          cd dist
+          version="${RELEASE_TAG#v}"
+          test -f "invariant_runtime-${version}-py3-none-any.whl"
+          test -f "invariant_runtime-${version}.tar.gz"
+          test -f SHA256SUMS
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          test "$(wc -l < SHA256SUMS)" -eq 2
+          sha256sum --check SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-pypi-${{ inputs.tag }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish verified distributions via OIDC
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/invariant-runtime/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-pypi-${{ inputs.tag }}
+          path: dist/
+
+      - name: Recheck integrity before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum --check SHA256SUMS
+          rm SHA256SUMS
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
