@@ -22,15 +22,15 @@ Hello, Invariant!
 - Python 3.11 or newer (the package declares `requires-python >=3.11`)
 - Invariant Runtime installed in the active environment
 
-Clone the source repository and install it locally:
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) in your Python environment (preferably a virtual environment):
 
 ```bash
-git clone https://github.com/kymuco/invariant-runtime.git
-cd invariant-runtime
-python -m pip install .
+python -m pip install invariant-runtime==0.1.1a1
 ```
 
-This installs the checked-out source; it does not assume a release has been published to a package registry.
+The explicit version selects the published alpha, whose API may change before 1.0. No repository checkout is needed for this three-file tutorial: create `hello_plugin/` in any working directory.
+
+To run the checked-in examples or contribute to Invariant itself, [clone the repository](https://github.com/kymuco/invariant-runtime) separately. A source checkout is for examples and development, not a prerequisite to installing the runtime.
 
 Invariant uses only the Python standard library at runtime. The optional `[test]` and `[docs]` extras are for development, not for running plugins.
 

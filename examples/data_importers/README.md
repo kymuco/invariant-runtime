@@ -6,7 +6,7 @@ expects every implementation to support `load(path)` returning order rows.
 
 ## Run
 
-From the checkout root after `python -m pip install .`:
+Install the alpha runtime from PyPI with `python -m pip install invariant-runtime==0.1.1a1`, then run this example from the repository checkout root. The checkout supplies the sample files; Invariant itself comes from PyPI:
 
 ```bash
 python examples/data_importers/run.py

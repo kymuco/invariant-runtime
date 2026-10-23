@@ -4,12 +4,19 @@
 
 ## Start here
 
-Run a small order-importer application first. Two versioned plugins parse CSV and JSON, and the host chooses the implementation:
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) using Python 3.11+:
+
+```bash
+python -m pip install invariant-runtime==0.1.1a1
+```
+
+The explicit version pins the alpha. No checkout is needed to use Invariant in your own application.
+
+To try the included order-importer example, clone the repository for the example files and run the host with the installed PyPI package. Two versioned plugins parse CSV and JSON, and the host chooses the implementation:
 
 ```bash
 git clone https://github.com/kymuco/invariant-runtime.git
 cd invariant-runtime
-python -m pip install .
 python examples/data_importers/run.py
 ```
 

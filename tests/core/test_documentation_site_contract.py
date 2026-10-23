@@ -96,7 +96,10 @@ def test_documentation_home_is_a_product_front_door() -> None:
     assert "orders.csv: 2 items, total $30.25" in home
     assert "python examples/data_importers/run.py" in home
     assert "not a hostile-code sandbox" in home
-    assert "python -m pip install ." in home
+    assert "python -m pip install invariant-runtime==0.1.1a1" in home
+    assert "python -m pip install invariant-runtime==0.1.1a1" in readme
+    tutorial = (_DOCS_ROOT / "getting-started.md").read_text(encoding="utf-8")
+    assert "python -m pip install invariant-runtime==0.1.1a1" in tutorial
 
     for page in (home, readme):
         assert "<picture" not in page
