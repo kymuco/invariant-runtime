@@ -368,3 +368,39 @@ def test_exact_version_required_for_install_roots_and_dependencies(tmp_path):
     with pytest.raises(StoreError, match='exact plugin versions'):
         store.install([core, a], roots=['lab:voice-a@latest'])
     assert store.state()['plugins'] == {}
+
+
+def test_capability_dependency_with_whitespace_and_case_is_host_supplied(tmp_path):
+    core, voice, _ = fixtures(tmp_path)
+    with zipfile.ZipFile(voice) as z:
+        manifest = json.loads(z.read('manifest.json'))
+        code = z.read('plugin.py')
+    manifest['dependencies'].append({
+        'id': ' Invariant:Capability.fs_sandbox@0.3.0 ',
+        'param': 'fs',
+        'scope': 'EXECUTION',
+        'optional': False,
+    })
+    with zipfile.ZipFile(voice, 'w') as z:
+        z.writestr('manifest.json', json.dumps(manifest))
+        z.writestr('plugin.py', code)
+    store = LocalPluginStore(tmp_path / 'store')
+    store.install([core, voice], roots=['lab:voice-a@1.0.0'])
+    assert set(store.state()['plugins']) == {'lab:core@1.0.0', 'lab:voice-a@1.0.0'}
+
+
+@pytest.mark.parametrize('reserved', [
+    '.INVARIANT-RECEIPT.JSON', 'nested/.Invariant-Receipt.Json',
+])
+def test_receipt_path_casefold_alias_rejected(tmp_path, reserved):
+    core, _, _ = fixtures(tmp_path)
+    evil = tmp_path / 'evil.zip'
+    with zipfile.ZipFile(core) as source, zipfile.ZipFile(evil, 'w') as dst:
+        for name in source.namelist():
+            dst.writestr(name, source.read(name))
+        dst.writestr(reserved, '{}')
+    store = LocalPluginStore(tmp_path / 'store')
+    with pytest.raises(StoreError, match='reserved receipt path'):
+        store.install([evil], roots=['lab:core@1.0.0'])
+    assert store.state()['plugins'] == {}
+    assert list(store.objects.iterdir()) == []

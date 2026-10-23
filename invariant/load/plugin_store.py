@@ -23,7 +23,7 @@ from typing import Iterable
 
 from invariant.load.env.lock import FileLock
 from invariant.load.sources.manifest import ManifestSource
-from invariant.spec.ids import canonical_plugin_id, split_id_version
+from invariant.spec.ids import canonical_id_or_ref, canonical_plugin_id, split_id_version
 from invariant.spec.versioning import canon_version_key
 
 _MAX_ARCHIVE_BYTES = 30 * 1024 * 1024
@@ -72,10 +72,15 @@ def _dependencies(manifest: dict) -> tuple[str, ...]:
         optional = dependency.get("optional", False)
         if not isinstance(optional, bool):
             raise PluginStoreError("plugin dependency optional must be boolean")
-        # The host, not the installer, supplies capabilities at activation.
-        if dependency["id"].casefold().startswith("invariant:capability.") or optional:
+        # Normalize using the same ID contract as PluginMeta/DependencySpec.
+        try:
+            normalized = canonical_id_or_ref(dependency["id"])
+        except (TypeError, ValueError) as exc:
+            raise PluginStoreError(f"invalid plugin dependency: {exc}") from exc
+        # Capabilities belong to the host; optional plugin deps need no install.
+        if normalized.startswith("invariant:capability.") or optional:
             continue
-        result.append(_reference(dependency["id"]))
+        result.append(_reference(normalized))
     return tuple(result)
 
 
@@ -121,7 +126,7 @@ def _candidate(archive: Path, expected_sha256: str | None) -> _Candidate:
         total = 0
         for member in members:
             name = _safe_name(member.filename)
-            if _RECEIPT in PurePosixPath(name).parts:
+            if _RECEIPT in (part.casefold() for part in PurePosixPath(name).parts):
                 raise PluginStoreError("reserved receipt path in ZIP")
             if name.casefold() in seen:
                 raise PluginStoreError(f"duplicate ZIP member: {name}")
