@@ -246,6 +246,7 @@ def test_isolated_zip_rejects_tampering_before_worker_or_env_setup(tmp_path, mon
     store = LocalPluginStore(tmp_path / "store")
     store.install_zip(archive)
     loader = PluginLoader([ZipSource(store=store)])
+    assert loader.sources[0].env_manager is loader._env_manager
     descriptor = loader.discover(mode="strict", fail_fast=True)[0]
     from invariant.load.isolated_proxy import IsolatedPluginProxy
 
