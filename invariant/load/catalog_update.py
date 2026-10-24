@@ -146,6 +146,22 @@ class _OsCheckpointLock:
             self._thread.release()
 
 
+def _sync_directory(path: Path) -> None:
+    """Make completed rename/directory creation durable on POSIX filesystems.
+
+    Windows Python does not provide a portable directory-fsync interface;
+    OS/process-crash recovery is supported there but power-loss durability
+    requires an external host guarantee for the checkpoint volume.
+    """
+    if os.name == "nt":
+        return
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 @dataclass(frozen=True, slots=True)
 class AcceptedCatalogUpdate:
     """A verified catalog admitted for a specific local publisher/channel."""
@@ -243,7 +259,11 @@ class CatalogUpdateJournal:
             raise CatalogUpdateError(f"catalog bytes failed verification: {exc}") from exc
         accepted = AcceptedCatalogUpdate(catalog, trusted_hash, sequence, self.publisher, self.channel, expires)
 
-        self.home.mkdir(parents=True, exist_ok=True)
+        created_home = not self.home.exists()
+        # The host supplies an existing parent/volume for this protected state.
+        self.home.mkdir(parents=False, exist_ok=True)
+        if created_home:
+            _sync_directory(self.home.parent)
         with self._lock:
             # Clock freshness is checked *after* waiting for any other writer.
             now = _now(now)
@@ -276,6 +296,9 @@ class CatalogUpdateJournal:
                 "expires_at": _utc_string(expires),
                 "observed_at": _utc_string(now),
             })
+            # _write_json_atomic fsyncs the temp file before os.replace;
+            # sync the containing directory as well before acknowledging it.
+            _sync_directory(self.home)
         return accepted
 
     def assert_current(self, accepted: AcceptedCatalogUpdate, *, now: datetime | None = None) -> None:
