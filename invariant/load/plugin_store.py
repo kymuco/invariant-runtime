@@ -2,7 +2,8 @@
 
 This is not a Python-package manager, remote source, marketplace installer,
 public facade, or sandbox. All roots and source ZIPs are supplied explicitly
-by the host. The existing ManifestSource/PluginService remains the consumer.
+by the host. InstalledSource presents verified objects to the existing
+PluginLoader/PluginService; ManifestSource is reused for manifest validation.
 
 Installed artifacts are content-addressed; identity is exact plugin ID@version.
 Logical removal never deletes files that a running consumer may still need.
@@ -185,9 +186,10 @@ def _write_json_atomic(dest: Path, value: dict) -> None:
 class LocalPluginStore:
     """Internal store; ZIPs and pinned roots are always supplied locally.
 
-    Do not remove objects automatically: neither PluginService nor the store
-    tracks active consumers in other processes. Callers must not mutate the
-    installed artifact tree. This class is not part of invariant.api/spec.
+    Managed Store sessions use durable cross-process consumer leases. Callers
+    using bare plugin_roots() paths remain untracked: physical cleanup needs
+    an explicit host confirmation. Callers must not mutate installed files.
+    This class is not part of invariant.api/spec.
     """
 
     def __init__(self, home: Path) -> None:
