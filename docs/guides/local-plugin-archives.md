@@ -131,6 +131,37 @@ filesystem. No marketplace search or dependency-resolution download is
 performed implicitly. A host must explicitly authorize each URL and provide
 its trusted digest.
 
+## Pinned Plugin Catalog v1 (internal)
+
+A catalog is only a finite set of artifact offers. It does not fetch packages,
+select version ranges, approve installation, or execute plugins. The host must
+obtain an **independently trusted SHA-256 of the entire catalog bytes** before
+using it (a digest supplied by the same untrusted catalog server is not enough).
+
+```python
+from pathlib import Path
+from invariant.load.plugin_catalog import VerifiedPluginCatalog
+
+catalog = VerifiedPluginCatalog.from_bytes(
+    Path("catalog.json").read_bytes(),
+    expected_sha256="<independently-trusted-catalog-sha256>",
+)
+planner = catalog.planner(store, allowed_origins={"https://plugins.example"})
+plan = planner.plan(["example:voice-a@1.0.0"])
+
+# The application presents the exact plan for authorization. Only after
+# explicit host approval:
+result = planner.apply(plan, approved_plan_id=plan.plan_id)
+```
+
+The catalog is verified *offline*, contains only pinned plugin refs, URLs,
+archive SHA-256 values and required exact dependencies, and is immutable after
+parsing. Its offers still pass the existing planner's HTTPS origin checks; the
+downloaded manifests must still match the approved dependency graph. A catalog
+digest authenticates bytes only relative to the host's trusted expected digest.
+See [Plugin Catalog v1](../reference/plugin-catalog-v1.md) for the schema and
+trust boundary.
+
 ## Host-approved installation plan (internal)
 
 A host can preview a **finite set of exact plugin versions** before requesting

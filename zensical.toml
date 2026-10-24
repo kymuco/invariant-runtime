@@ -28,6 +28,7 @@ nav = [
   { "Reference" = [
     { "Public API" = "reference/public-api.md" },
     { "Manifest v1" = "reference/manifest-v1.md" },
+    { "Plugin Catalog v1 (internal)" = "reference/plugin-catalog-v1.md" },
     { "Capabilities" = "reference/capabilities.md" },
   ] },
   { "Security" = "security.md" },
