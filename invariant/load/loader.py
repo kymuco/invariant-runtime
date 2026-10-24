@@ -37,7 +37,8 @@ class PluginLoader:
         # Loader owns isolated-environment configuration even when used without
         # the higher-level PluginService facade.
         for source in self.sources:
-            if hasattr(source, "env_manager") and source.env_manager is None:
+            if (getattr(source, "kind", None) in {"manifest", "zip"}
+                    and getattr(source, "env_manager", None) is None):
                 source.env_manager = self._env_manager
 
     def discover(
