@@ -10,12 +10,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from invariant.load.env.lock import FileLock
 from invariant.load.plugin_catalog import (
     PluginCatalogError,
     VerifiedPluginCatalog,
@@ -82,6 +83,69 @@ def _parse_json(payload: bytes, label: str) -> dict:
     return value
 
 
+class _OsCheckpointLock:
+    """Persistent OS-backed lock: no stale unlink, no shared ownership token.
+
+    OS file locks are released by the kernel when a process dies. The lock
+    file itself is deliberately not removed; replacing it breaks inode-based
+    locking on POSIX. An in-process mutex also protects one instance's fd.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._thread = threading.Lock()
+        self._fd: int | None = None
+
+    def __enter__(self):
+        self._thread.acquire()
+        fd = None
+        try:
+            if self.path.is_symlink():
+                raise CatalogUpdateError("catalog checkpoint lock must not be a symlink")
+            fd = os.open(
+                self.path,
+                os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            if os.name == "nt":
+                import msvcrt
+
+                # msvcrt.locking locks one byte starting at the current offset.
+                if os.fstat(fd).st_size == 0:
+                    os.write(fd, b"\0")
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            self._fd = fd
+            return self
+        except BaseException:
+            if fd is not None:
+                os.close(fd)
+            self._thread.release()
+            raise
+
+    def __exit__(self, exc_type, exc, tb):
+        fd = self._fd
+        assert fd is not None
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+            self._fd = None
+            self._thread.release()
+
+
 @dataclass(frozen=True, slots=True)
 class AcceptedCatalogUpdate:
     """A verified catalog admitted for a specific local publisher/channel."""
@@ -112,7 +176,7 @@ class CatalogUpdateJournal:
         self.channel = channel
         key = hashlib.sha256(f"{publisher}\0{channel}".encode("ascii")).hexdigest()
         self.checkpoint = self.home / f"catalog-update-{key}.json"
-        self._lock = FileLock(self.home / f".catalog-update-{key}.lock", stale_after_s=3600)
+        self._lock = _OsCheckpointLock(self.home / f".catalog-update-{key}.lock")
 
     def _read(self) -> dict | None:
         if self.checkpoint.is_symlink():
