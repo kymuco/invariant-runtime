@@ -228,3 +228,23 @@ def test_https_acquisition_reuses_single_installed_plugin_dependency(tmp_path, m
     ) as archive:
         assert store.install_zip(archive, expected_sha256=expected)["new_objects"] == []
     assert len(list(store.objects.iterdir())) == 3
+
+
+def test_http_error_response_closes_without_reading_error_body(monkeypatch):
+    response = io.BytesIO(b"untrusted error payload")
+    url = "https://plugins.example/core.zip"
+
+    class ErrorOpener:
+        def open(self, request, timeout):
+            raise acq.urllib.error.HTTPError(
+                url, 302, "redirect", {}, response,
+            )
+
+    monkeypatch.setattr(acq.urllib.request, "build_opener", lambda *args: ErrorOpener())
+    with pytest.raises(acq.PluginAcquisitionError, match="download rejected"):
+        with acq.download_verified_zip(
+            url, expected_sha256="a" * 64,
+            allowed_origins=["https://plugins.example"],
+        ):
+            pytest.fail("HTTPError must not yield a ZIP")
+    assert response.closed
