@@ -311,3 +311,36 @@ def test_checkpoint_kernel_lock_recovers_after_crashed_process(tmp_path):
     j.assert_current(accepted, now=NOW)
     # A second journal instance can also acquire the surviving OS lock.
     journal(tmp_path).assert_current(accepted, now=NOW)
+
+
+def test_checkpoint_rename_synced_before_admit_reports_success(tmp_path, monkeypatch):
+    import os
+    import invariant.load.catalog_update as catalog_update
+
+    if os.name == "nt":
+        pytest.skip("directory fsync is POSIX-only; Windows limitation documented")
+    j = journal(tmp_path)
+    c = payload()
+    events = []
+    original_write = catalog_update._write_json_atomic
+    original_sync = catalog_update._sync_directory
+
+    def observe_write(path, value):
+        original_write(path, value)
+        events.append(("write", path))
+
+    def observe_sync(path):
+        original_sync(path)
+        events.append(("sync", path))
+
+    monkeypatch.setattr(catalog_update, "_write_json_atomic", observe_write)
+    monkeypatch.setattr(catalog_update, "_sync_directory", observe_sync)
+    accept(j, metadata(1, c), c, bootstrap=True)
+    assert events == [
+        ("sync", j.home.parent),
+        ("write", j.checkpoint),
+        ("sync", j.home),
+    ]
+    events.clear()
+    accept(j, metadata(1, c), c, now=NOW + timedelta(minutes=1))
+    assert events == [("write", j.checkpoint), ("sync", j.home)]
