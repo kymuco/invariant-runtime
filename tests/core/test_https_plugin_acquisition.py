@@ -86,6 +86,7 @@ def test_mismatched_sha256_never_yields_zip(monkeypatch):
     ("https://plugins.example\\@other.example/core.zip", ["https://plugins.example"]),
     ("https://plugins.example/core.zip#part", ["https://plugins.example"]),
     ("https://plugins.example:8443/core.zip", ["https://plugins.example"]),
+    ("https://plugins.example:0/core.zip", ["https://plugins.example"]),
     ("https://plugins.example/core.zip", ["https://plugins.example/path"]),
     ("https://plugins.example/core.zip", []),
 ])
