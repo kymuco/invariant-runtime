@@ -253,3 +253,61 @@ def test_expiry_rechecked_after_waiting_for_checkpoint_lock(tmp_path, monkeypatc
             envelope, catalog,
             trusted_metadata_sha256=hashlib.sha256(envelope).hexdigest(),
         )
+
+
+def test_shared_journal_serializes_threads_without_orphaning_lock(tmp_path):
+    import concurrent.futures
+    import threading
+    import time
+
+    j = journal(tmp_path)
+    c = payload()
+    accepted = accept(j, metadata(1, c), c, bootstrap=True)
+    reached = threading.Event()
+    proceed = threading.Event()
+    original = j._read
+    read_guard = threading.Lock()
+    reads = [0]
+
+    def slow_read():
+        with read_guard:
+            reads[0] += 1
+            first_reader = reads[0] == 1
+        if first_reader:
+            reached.set()
+            assert proceed.wait(timeout=5)
+        return original()
+
+    j._read = slow_read
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(j.assert_current, accepted, now=NOW)
+        assert reached.wait(timeout=5)
+        second = executor.submit(j.assert_current, accepted, now=NOW)
+        # Both calls overlap while the first owns the file lock.
+        time.sleep(0.05)
+        proceed.set()
+        assert first.result(timeout=10) is None
+        assert second.result(timeout=10) is None
+    # A later operation must not be blocked by a leaked lock ownership token.
+    j.assert_current(accepted, now=NOW)
+
+
+def test_checkpoint_kernel_lock_recovers_after_crashed_process(tmp_path):
+    import subprocess
+    import sys
+
+    j = journal(tmp_path)
+    c = payload()
+    accepted = accept(j, metadata(1, c), c, bootstrap=True)
+    code = (
+        "from invariant.load.catalog_update import _OsCheckpointLock; "
+        "from pathlib import Path; import os; "
+        f"lock = _OsCheckpointLock(Path({str(j._lock.path)!r})); "
+        "lock.__enter__(); os._exit(0)"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True, timeout=15)
+    # Same lock pathname remains; kernel automatically releases its owner.
+    assert j._lock.path.exists()
+    j.assert_current(accepted, now=NOW)
+    # A second journal instance can also acquire the surviving OS lock.
+    journal(tmp_path).assert_current(accepted, now=NOW)
