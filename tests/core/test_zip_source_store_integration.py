@@ -132,6 +132,22 @@ def test_direct_archive_paths_cannot_install_during_discovery(tmp_path):
     assert not (tmp_path / "store").exists()
 
 
+def test_zip_source_uses_registry_canonical_versions(tmp_path):
+    root = tmp_path / "source"
+    archive = make_zip(root, "lab:core")
+    with zipfile.ZipFile(archive) as original:
+        manifest = json.loads(original.read("manifest.json"))
+        code = original.read("plugin.py")
+    manifest["version"] = "v1.0"
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("manifest.json", json.dumps(manifest))
+        output.writestr("plugin.py", code)
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(archive)
+    with store.open_service() as service:
+        assert service.get("lab:core@1.0.0").call() == 1
+
+
 def test_zip_source_maturity_filter_uses_manifest_policy(tmp_path):
     archive = make_zip(tmp_path, "lab:core", maturity="beta")
     store = LocalPluginStore(tmp_path / "store")
