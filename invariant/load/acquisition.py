@@ -126,6 +126,11 @@ def download_verified_zip(
                         output.write(chunk)
                 if length is not None and total != claimed:
                     raise PluginAcquisitionError("incomplete HTTPS download")
+        except urllib.error.HTTPError as exc:
+            # HTTPError owns the socket even when the response context was not
+            # entered. Close it without reading the potentially unbounded body.
+            exc.close()
+            raise PluginAcquisitionError("HTTPS download rejected") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise PluginAcquisitionError("HTTPS download failed") from exc
         if not hmac.compare_digest(digest.hexdigest(), expected_sha256.lower()):
