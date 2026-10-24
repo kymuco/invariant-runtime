@@ -664,3 +664,54 @@ def test_open_service_shutdown_failure_preserves_durable_lease(tmp_path):
     assert len(pinned) == 1  # A failed shutdown cannot release protection.
     store.uninstall_root('lab:core@1.0.0')
     assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
+
+
+def test_install_zip_root_reuses_preinstalled_plugin_dependency(tmp_path):
+    core, voice_a, voice_b = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    result_core = store.install_zip(core)
+    result_a = store.install_zip(voice_a)
+    result_b = store.install_zip(voice_b)
+    assert result_core['new_objects'] == ['lab:core@1.0.0']
+    assert result_a['new_objects'] == ['lab:voice-a@1.0.0']
+    assert result_b['new_objects'] == ['lab:voice-b@1.0.0']
+    assert len(list(store.objects.iterdir())) == 3
+    assert len(store.state()['plugins']) == 3
+    with store.open_service() as service:
+        first = service.get('lab:voice-a@1.0.0')
+        second = service.get('lab:voice-b@1.0.0')
+        assert first.use() == 1
+        assert second.use() == 2
+        assert first.core is second.core
+
+
+def test_install_zip_same_content_different_zip_bytes_is_idempotent(tmp_path):
+    core, _, _ = fixtures(tmp_path)
+    repacked = tmp_path / 'same-content.zip'
+    with zipfile.ZipFile(core) as source, zipfile.ZipFile(
+        repacked, 'w', compression=zipfile.ZIP_DEFLATED,
+    ) as out:
+        for name in reversed(source.namelist()):
+            out.writestr(name, source.read(name))
+    store = LocalPluginStore(tmp_path / 'store')
+    assert store.install_zip(core)['new_objects'] == ['lab:core@1.0.0']
+    assert store.install_zip(repacked)['new_objects'] == []
+    assert len(list(store.objects.iterdir())) == 1
+
+
+def test_install_zip_missing_plugin_dependency_does_not_download_or_commit(tmp_path):
+    _, voice_a, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    with pytest.raises(StoreError, match='missing required plugin dependency'):
+        store.install_zip(voice_a)
+    assert store.state()['plugins'] == {}
+    assert list(store.objects.iterdir()) == []
+
+
+def test_install_zip_expected_sha256_mismatch_fails_closed(tmp_path):
+    core, _, _ = fixtures(tmp_path)
+    store = LocalPluginStore(tmp_path / 'store')
+    with pytest.raises(StoreError, match='ZIP SHA-256 mismatch'):
+        store.install_zip(core, expected_sha256='0' * 64)
+    assert store.state()['plugins'] == {}
+    assert list(store.objects.iterdir()) == []
