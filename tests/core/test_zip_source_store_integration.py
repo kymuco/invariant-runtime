@@ -11,6 +11,7 @@ import pytest
 from invariant.api import PluginService
 from invariant.load.loader import PluginLoader
 from invariant.load.plugin_store import LocalPluginStore, PluginStoreError
+from invariant.load.sources.installed import InstalledSource
 from invariant.load.sources.zip import ZipSource
 from invariant.spec.errors import PluginLoadError
 
@@ -59,7 +60,7 @@ def make_zip(root: Path, name: str, *, dependency: str | None = None,
     return path
 
 
-def test_store_service_is_zip_source_and_reuses_shared_dependency(tmp_path):
+def test_store_service_uses_verified_installed_source_and_reuses_shared_dependency(tmp_path):
     root = tmp_path / "source"
     core = make_zip(root, "lab:core")
     voice_a = make_zip(root, "lab:voice-a", dependency="lab:core@1.0.0")
@@ -71,9 +72,9 @@ def test_store_service_is_zip_source_and_reuses_shared_dependency(tmp_path):
     with store.open_service() as service:
         assert isinstance(service.loader, PluginLoader)
         assert len(service.loader.sources) == 1
-        assert isinstance(service.loader.sources[0], ZipSource)
+        assert isinstance(service.loader.sources[0], InstalledSource)
         assert service.loader.sources[0].env_manager is service.env_manager
-        assert {descriptor.source.kind for descriptor in service.registry.list()} == {"zip"}
+        assert {descriptor.source.kind for descriptor in service.registry.list()} == {"installed"}
         a = service.get("lab:voice-a@1.0.0")
         b = service.get("lab:voice-b@1.0.0")
         assert a.use() == 1
@@ -106,33 +107,32 @@ def test_lease_snapshot_survives_logical_uninstall_before_discover(tmp_path):
     store.install_zip(archive)
     with store.leased_plugin_roots() as snapshot:
         store.uninstall_root("lab:core@1.0.0")
-        source = ZipSource(store=store, installed_roots=snapshot)
+        source = InstalledSource(store, snapshot)
         descriptions = source.discover(fail_fast=True)
         assert [d.meta.id for d in descriptions] == ["lab:core"]
         assert store.prune_unreferenced(confirmed_untracked_consumers_stopped=True) == []
     assert len(store.prune_unreferenced(confirmed_untracked_consumers_stopped=True)) == 1
 
 
-def test_zip_source_rejects_forged_code_path(tmp_path):
+def test_installed_source_rejects_forged_code_path(tmp_path):
     archive = make_zip(tmp_path, "lab:core")
     store = LocalPluginStore(tmp_path / "store")
     store.install_zip(archive)
-    source = ZipSource(store=store)
+    source = InstalledSource(store, store.plugin_roots())
     descriptor = source.discover(fail_fast=True)[0]
     forged_source = replace(descriptor.source, path=tmp_path / "foreign.py")
     with pytest.raises(PluginLoadError, match="differs from installed manifest"):
         source.load(forged_source, descriptor=replace(descriptor, source=forged_source))
 
 
-def test_direct_archive_paths_cannot_install_during_discovery(tmp_path):
+def test_archive_zip_source_remains_separate_from_installed_runtime(tmp_path):
     archive = make_zip(tmp_path, "lab:core")
-    with pytest.raises(ValueError, match="Install local ZIP paths explicitly"):
-        ZipSource([str(archive)])
-    assert ZipSource().discover(fail_fast=True) == []
+    # Direct archive discovery is not an implicit installation route.
+    assert ZipSource([str(archive)]).discover(fail_fast=True) == []
     assert not (tmp_path / "store").exists()
 
 
-def test_zip_source_uses_registry_canonical_versions(tmp_path):
+def test_installed_source_uses_registry_canonical_versions(tmp_path):
     root = tmp_path / "source"
     archive = make_zip(root, "lab:core")
     with zipfile.ZipFile(archive) as original:
@@ -148,11 +148,11 @@ def test_zip_source_uses_registry_canonical_versions(tmp_path):
         assert service.get("lab:core@1.0.0").call() == 1
 
 
-def test_zip_source_maturity_filter_uses_manifest_policy(tmp_path):
+def test_installed_source_maturity_filter_uses_manifest_policy(tmp_path):
     archive = make_zip(tmp_path, "lab:core", maturity="beta")
     store = LocalPluginStore(tmp_path / "store")
     store.install_zip(archive)
-    source = ZipSource(store=store)
+    source = InstalledSource(store, store.plugin_roots())
     assert source.discover() == []
     assert [d.meta.id for d in source.discover(include_unstable=True)] == ["lab:core"]
     with store.open_service(include_unstable=True) as service:
@@ -168,8 +168,8 @@ def test_loader_routes_each_zip_descriptor_to_its_own_store(tmp_path):
     store_b = LocalPluginStore(tmp_path / "store-b")
     store_a.install_zip(archive_a)
     store_b.install_zip(archive_b)
-    first = ZipSource(store=store_a)
-    second = ZipSource(store=store_b)
+    first = InstalledSource(store_a, store_a.plugin_roots())
+    second = InstalledSource(store_b, store_b.plugin_roots())
     loader = PluginLoader([first, second])
     descriptors = loader.discover(mode="strict", fail_fast=True)
     assert len(descriptors) == 2
@@ -226,7 +226,7 @@ def test_direct_discovery_load_accepts_uncanonical_version(tmp_path):
         output.writestr("plugin.py", code)
     store = LocalPluginStore(tmp_path / "store")
     store.install_zip(archive)
-    loader = PluginLoader([ZipSource(store=store)])
+    loader = PluginLoader([InstalledSource(store, store.plugin_roots())])
     descriptor = loader.discover(mode="strict", fail_fast=True)[0]
     assert descriptor.meta.version == "v1.0"
     instance = loader.load(descriptor)
@@ -245,13 +245,13 @@ def test_isolated_zip_rejects_tampering_before_worker_or_env_setup(tmp_path, mon
         output.writestr("requirements.txt", "# no external deps\n")
     store = LocalPluginStore(tmp_path / "store")
     store.install_zip(archive)
-    loader = PluginLoader([ZipSource(store=store)])
+    loader = PluginLoader([InstalledSource(store, store.plugin_roots())])
     assert loader.sources[0].env_manager is loader._env_manager
     descriptor = loader.discover(mode="strict", fail_fast=True)[0]
     from invariant.load.isolated_proxy import IsolatedPluginProxy
 
     def unexpected_worker(*args, **kwargs):
-        pytest.fail("isolated worker bypassed ZipSource provenance verification")
+        pytest.fail("isolated worker bypassed InstalledSource verification")
 
     monkeypatch.setattr(IsolatedPluginProxy, "from_descriptor", unexpected_worker)
     target = store.objects / store.state()["plugins"]["lab:core@1.0.0"] / "plugin.py"
