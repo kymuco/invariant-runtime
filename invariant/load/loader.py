@@ -90,15 +90,16 @@ class PluginLoader:
         Load a plugin via the first suitable source.
         """
         deps = self._deps_from_descriptor(descriptor)
-        if deps is not None and deps.is_isolated():
-            logger.info("Loading isolated plugin %s mode=%s", descriptor.meta.id, deps.mode)
-            return IsolatedPluginProxy.from_descriptor(
-                descriptor,
-                env_manager=self._env_manager,
-            )
-        
         for src in self.sources:
             if src.can_load(descriptor.source):
+                if deps is not None and deps.is_isolated() and not src.handles_isolated_load:
+                    # Legacy sources delegate isolated execution to the loader.
+                    logger.info("Loading isolated plugin %s mode=%s", descriptor.meta.id, deps.mode)
+                    return IsolatedPluginProxy.from_descriptor(
+                        descriptor, env_manager=self._env_manager,
+                    )
+                # Sources such as ZipSource validate artifact provenance before
+                # either in-process or isolated worker activation.
                 return src.load(descriptor.source, registry, descriptor=descriptor)
 
         raise PluginLoadError(
