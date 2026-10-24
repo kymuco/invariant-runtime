@@ -107,6 +107,9 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 ## Source status
 
 - `ManifestSource` and `FilesystemSource` support direct local discovery.
+- The internal `invariant.load.acquisition` HTTPS helper downloads only
+  explicitly authorized, digest-verified ZIPs. It does not discover or install
+  plugins; callers pass verified temporary archives to the existing Store.
 - `LocalPluginStore` explicitly acquires local ZIP artifacts and owns
   content-addressed installation, dependency deduplication, and leases.
 - `InstalledSource` discovers and activates **verified installed objects**

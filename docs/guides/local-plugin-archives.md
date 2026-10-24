@@ -65,6 +65,37 @@ Replace the placeholder with the real expected digest; it is not a usable value 
 
 If Voice B needs the already-installed `example:audio-core@1.0.0`, install its own archive into the **same Store**. The existing Audio Core object is reused rather than extracted a second time. Different concrete versions may coexist. Missing required plugin dependencies fail installation; there is **no automatic download**, network request, marketplace lookup, or implicit approval.
 
+## Explicit verified HTTPS download (internal)
+
+HTTPS delivery is a separate **host-authorized acquisition step**, not a
+`PluginSource` that downloads during runtime discovery. Before downloading,
+the host must independently obtain the expected SHA-256 and approve the exact
+HTTPS origin. For example:
+
+```python
+from invariant.load.acquisition import download_verified_zip
+
+url = "https://plugins.example/voice-a.zip"
+expected_sha256 = "0123456789abcdef" * 4  # Replace with a trusted real digest
+
+with download_verified_zip(
+    url,
+    expected_sha256=expected_sha256,
+    allowed_origins={"https://plugins.example"},
+) as archive:
+    store.install_zip(archive, expected_sha256=expected_sha256)
+```
+
+The HTTPS helper streams no more than 30 MiB by default, enforces certificate
+validation, refuses redirects and ambient proxy routing, verifies exact bytes,
+and removes its temporary ZIP on exit or error. It does **not** resolve plugin
+dependencies, grant capabilities, install plugins implicitly, or execute code.
+The existing Store validates the archive again and reuses installed plugin
+dependencies. The allowed origin controls the destination, not what happens
+inside a downloaded plugin; a SHA-256 does not itself establish publisher
+trust. A URL obtained from an untrusted catalog cannot also serve as the
+trusted source of the expected digest.
+
 ## Session lifetime and removal
 
 Use `with store.open_service()` for the entire lifetime of the objects you obtain from it. The session holds an on-disk consumer lease and shuts managed instances down before releasing that lease. Do not use returned plugin objects after the `with` block or leave execution-scoped contexts running beyond it.
