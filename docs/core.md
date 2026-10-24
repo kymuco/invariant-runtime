@@ -107,10 +107,13 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 ## Source status
 
 - `ManifestSource` and `FilesystemSource` are implemented.
-- `EntrypointSource`, `ZipSource`, and `RemoteSource` remain incomplete/stubbed.
-- The internal `LocalPluginStore` can explicitly install local ZIP artifacts and
-  share installed plugin dependencies. This is distinct from `ZipSource` discovery;
-  see [Install local plugin ZIPs](guides/local-plugin-archives.md).
+- `ManifestSource` and `FilesystemSource` support direct local discovery.
+- `ZipSource` discovers and loads **already-installed local ZIP artifacts**
+  through `PluginLoader`, using `ManifestSource` for validated materialized
+  Python modules. Acquisition and installation remain explicit Store actions.
+- `EntrypointSource` and `RemoteSource` remain incomplete/stubbed.
+- The internal `LocalPluginStore` owns content-addressed ZIP installation,
+  dependency deduplication and leases; see [Install local plugin ZIPs](guides/local-plugin-archives.md).
 
 ## Alpha readiness and operational guarantees
 

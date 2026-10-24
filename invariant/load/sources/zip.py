@@ -1,35 +1,70 @@
+"""Runtime source for ZIP-origin plugins already installed in LocalPluginStore.
+
+Acquisition and installation are explicit Store operations. This source never
+extracts, downloads, or installs in discover() or load(). The original ZIP may
+be deleted after installation; immutable materialized plugin files are loaded
+through the existing ManifestSource implementation.
+"""
 from __future__ import annotations
 
 import logging
-from typing import Any
+from dataclasses import replace
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Iterable
 
 from invariant.load.sources.base import PluginSource
+from invariant.load.sources.manifest import ManifestSource
+from invariant.spec.deps import PluginDepsSpec
 from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
 from invariant.spec.plugin import BasePlugin
 from invariant.spec.source import PluginSourceSpec
 
+if TYPE_CHECKING:
+    from invariant.load.env.env_manager import EnvManager
+    from invariant.load.plugin_store import LocalPluginStore
+
 logger = logging.getLogger(__name__)
 
 
 class ZipSource(PluginSource):
-    """
-    Zip-based source.
+    """Discover installed ZIP artifacts via the normal PluginLoader contract.
 
-    Stub implementation:
-    - discover() returns empty list
-    - load() raises PluginLoadError
-
-    When implemented, this should support loading plugin modules from:
-    - local zip file path (source.path)
-    - remote zip URL (source.url)
-    with integrity checks (checksum) and safe extraction.
+    ZIP inputs are not discovered here. Only explicit Store installations are
+    eligible. An optional snapshot is pinned by LocalPluginStore.open_service().
     """
 
     kind = "zip"
 
-    def __init__(self, search_paths: list[str] | None = None):
-        self.search_paths = list(search_paths or [])
+    def __init__(
+        self,
+        search_paths: list[str] | None = None,
+        *,
+        store: LocalPluginStore | None = None,
+        installed_roots: Iterable[Path] | None = None,
+        env_manager: EnvManager | None = None,
+    ) -> None:
+        if search_paths:
+            raise ValueError("Install local ZIP paths explicitly with LocalPluginStore first")
+        if installed_roots is not None and store is None:
+            raise ValueError("installed_roots requires a LocalPluginStore")
+        self.store = store
+        self._snapshot = tuple(Path(path) for path in installed_roots) if installed_roots is not None else None
+        self.env_manager = env_manager
+
+    def _roots(self) -> list[Path]:
+        if self.store is None:
+            return []
+        if self._snapshot is None:
+            return self.store.plugin_roots()
+        roots = list(self._snapshot)
+        for root in roots:
+            if root.parent.resolve() != self.store.objects.resolve():
+                raise PluginLoadError("installed ZIP root must belong to this PluginStore")
+            # A pinned object remains even after a concurrent logical uninstall.
+            # Verify by digest; catalog membership need not be current.
+            self.store._verify_object(root.name)
+        return roots
 
     def discover(
         self,
@@ -40,8 +75,34 @@ class ZipSource(PluginSource):
         fail_fast: bool = False,
         **kwargs: Any,
     ) -> list[PluginDescriptor]:
-        logger.debug("[ZipSource] discover() stub")
-        return []
+        result: list[PluginDescriptor] = []
+        for root in self._roots():
+            parser = ManifestSource([root], env_manager=self.env_manager)
+            try:
+                # One installed object = one plugin. Nested manifests inside
+                # an artifact must not become additional plugin registrations.
+                descriptor = parser._read_manifest(root / "manifest.json", dev_mode=dev_mode)
+                if not include_unstable and descriptor.meta.maturity != "stable":
+                    continue
+                if base_class is not None:
+                    deps = PluginDepsSpec.from_manifest((descriptor.source.extra or {}).get("deps"))
+                    if deps.is_isolated():
+                        continue
+                    source = descriptor.source
+                    if not source.module or not source.path or not source.class_name:
+                        raise PluginLoadError("incomplete installed ZIP plugin source")
+                    module = parser._load_module(source.module, source.path)
+                    plugin_cls = getattr(module, source.class_name, None)
+                    if not isinstance(plugin_cls, type) or not issubclass(plugin_cls, base_class):
+                        continue
+                # PluginLoader can now distinguish ZIP-origin installations;
+                # 'path' is the materialized code path, not the discarded ZIP.
+                result.append(replace(descriptor, source=replace(descriptor.source, kind=self.kind)))
+            except Exception:
+                logger.exception("Invalid installed ZIP plugin: %s", root)
+                if fail_fast:
+                    raise
+        return result
 
     def can_load(self, source: PluginSourceSpec) -> bool:
         return source.kind == self.kind
@@ -54,7 +115,21 @@ class ZipSource(PluginSource):
         descriptor: PluginDescriptor | None = None,
         **kwargs: Any,
     ) -> BasePlugin:
-        raise PluginLoadError(
-            "ZipSource is not implemented yet",
-            meta_id=getattr(getattr(descriptor, "meta", None), "id", None),
-        )
+        if not self.can_load(source) or descriptor is None or self.store is None:
+            raise PluginLoadError("ZIP loading requires an installed, registered descriptor")
+        raw_root = (source.extra or {}).get("plugin_root")
+        roots = self._roots()
+        if not isinstance(raw_root, str) or not any(Path(raw_root).resolve() == root.resolve() for root in roots):
+            raise PluginLoadError("ZIP descriptor is not installed in this PluginStore")
+        # Reject invented code paths/classes, not just invented plugin roots.
+        parser = ManifestSource([], env_manager=self.env_manager)
+        canonical = parser._read_manifest(Path(raw_root) / "manifest.json", dev_mode=False)
+        if (
+            descriptor.meta != canonical.meta
+            or source.path != canonical.source.path
+            or source.module != canonical.source.module
+            or source.class_name != canonical.source.class_name
+            or dict(source.extra) != dict(canonical.source.extra)
+        ):
+            raise PluginLoadError("ZIP descriptor differs from installed manifest")
+        return parser.load(canonical.source, registry, descriptor=canonical)
