@@ -106,7 +106,6 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 
 ## Source status
 
-- `ManifestSource` and `FilesystemSource` are implemented.
 - `ManifestSource` and `FilesystemSource` support direct local discovery.
 - `ZipSource` discovers and loads **already-installed local ZIP artifacts**
   through `PluginLoader`, using `ManifestSource` for validated materialized
