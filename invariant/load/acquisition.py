@@ -59,6 +59,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _validate_request(url, expected_sha256, allowed_origins, timeout_seconds, max_bytes):
+    origin = _https_origin(url)
+    if not isinstance(expected_sha256, str) or not _SHA256.fullmatch(expected_sha256):
+        raise PluginAcquisitionError("expected_sha256 must be 64 hexadecimal characters")
+    trusted = {_https_origin(candidate, origin_only=True) for candidate in allowed_origins}
+    if origin not in trusted:
+        raise PluginAcquisitionError("HTTPS origin not allowed")
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+        raise PluginAcquisitionError("max_bytes must be a positive integer")
+    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or not 0 < timeout_seconds <= 300:
+        raise PluginAcquisitionError("timeout_seconds must be in (0, 300]")
+
+
 @contextmanager
 def download_verified_zip(
     url: str,
@@ -76,16 +89,7 @@ def download_verified_zip(
     rejected. The temporary file is deleted after the context, including on
     exceptions. This function never installs or executes plugin code.
     """
-    origin = _https_origin(url)
-    if not isinstance(expected_sha256, str) or not _SHA256.fullmatch(expected_sha256):
-        raise PluginAcquisitionError("expected_sha256 must be 64 hexadecimal characters")
-    trusted = {_https_origin(candidate, origin_only=True) for candidate in allowed_origins}
-    if origin not in trusted:
-        raise PluginAcquisitionError("HTTPS origin not allowed")
-    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
-        raise PluginAcquisitionError("max_bytes must be a positive integer")
-    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or not 0 < timeout_seconds <= 300:
-        raise PluginAcquisitionError("timeout_seconds must be in (0, 300]")
+    _validate_request(url, expected_sha256, allowed_origins, timeout_seconds, max_bytes)
 
     # Explicitly bypass ambient HTTP(S)_PROXY settings. The host owns which
     # origin may be contacted, so environment proxies must not redirect it.
@@ -138,3 +142,44 @@ def download_verified_zip(
         if not zipfile.is_zipfile(downloaded):
             raise PluginAcquisitionError("downloaded artifact is not a ZIP")
         yield downloaded
+
+def install_verified_https_plugin(
+    store,
+    ref: str,
+    url: str,
+    *,
+    expected_sha256: str,
+    allowed_origins: Iterable[str],
+    timeout_seconds: float = 20.0,
+    max_bytes: int = _MAX_DOWNLOAD_BYTES,
+) -> dict:
+    """Explicitly install or reuse a verified plugin, never during discovery.
+
+    Coalesces same-digest acquisition across host processes. A cache hit is
+    valid only for exact ID/version + recorded ZIP digest + intact files. A
+    repacked ZIP with different bytes requires re-download and Store validation.
+    """
+    from invariant.load.env.lock import FileLock
+    from invariant.load.plugin_store import _reference
+
+    allowed = tuple(allowed_origins)
+    _validate_request(url, expected_sha256, allowed, timeout_seconds, max_bytes)
+    canonical = _reference(ref)
+    expected = expected_sha256.lower()
+    locks = store.home / ".acquisition-locks"
+    locks.mkdir(parents=True, exist_ok=True)
+    # This is separate from Store's catalog lock, so no global filesystem
+    # transaction is held across a network request.
+    lock = FileLock(locks / f"{expected}.lock", stale_after_s=3600)
+    with lock:
+        reused = store.reuse_verified_archive(canonical, expected)
+        if reused is not None:
+            return reused
+        with download_verified_zip(
+            url, expected_sha256=expected, allowed_origins=allowed,
+            timeout_seconds=timeout_seconds, max_bytes=max_bytes,
+        ) as archive:
+            result = store.install_zip(
+                archive, expected_sha256=expected, expected_ref=canonical,
+            )
+        return {**result, "reused": False}
