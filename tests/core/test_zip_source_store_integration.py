@@ -121,7 +121,7 @@ def test_installed_source_rejects_forged_code_path(tmp_path):
     source = InstalledSource(store, store.plugin_roots())
     descriptor = source.discover(fail_fast=True)[0]
     forged_source = replace(descriptor.source, path=tmp_path / "foreign.py")
-    with pytest.raises(PluginLoadError, match="differs from installed manifest"):
+    with pytest.raises(PluginLoadError, match="differs from verified manifest"):
         source.load(forged_source, descriptor=replace(descriptor, source=forged_source))
 
 
