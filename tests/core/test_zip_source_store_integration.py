@@ -259,3 +259,93 @@ def test_isolated_zip_rejects_tampering_before_worker_or_env_setup(tmp_path, mon
     target.write_text("# corrupted after discovery\n", encoding="utf-8")
     with pytest.raises(PluginStoreError, match="installed plugin file modified"):
         loader.load(descriptor)
+
+
+def test_manifest_and_installed_sources_are_independent(tmp_path):
+    from invariant.catalog.registry import PluginRegistry
+    from invariant.load.sources.manifest import ManifestSource
+
+    archive = make_zip(tmp_path / "archives", "lab:installed")
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(archive)
+    ordinary = tmp_path / "ordinary"
+    ordinary.mkdir()
+    (ordinary / "manifest.json").write_text(
+        json.dumps({
+            "manifest_version": 1,
+            "id": "lab:ordinary",
+            "version": "1.0.0",
+            "source": {"code_path": "plugin.py", "class_name": "Core"},
+        }), encoding="utf-8",
+    )
+    (ordinary / "plugin.py").write_text(CORE, encoding="utf-8")
+
+    with store.leased_plugin_roots() as roots:
+        installed = InstalledSource(store, roots)
+        raw = ManifestSource([ordinary])
+        # Put the broad manifest source first: it must not intercept the
+        # verified installed source, even when both have valid manifests.
+        loader = PluginLoader([raw, installed])
+        discovered = loader.discover(mode="strict", fail_fast=True)
+        assert {(d.meta.id, d.source.kind) for d in discovered} == {
+            ("lab:ordinary", "manifest"), ("lab:installed", "installed"),
+        }
+        raw_descriptor = next(d for d in discovered if d.meta.id == "lab:ordinary")
+        installed_descriptor = next(d for d in discovered if d.meta.id == "lab:installed")
+        assert raw.can_load(raw_descriptor.source)
+        assert not raw.can_load(installed_descriptor.source)
+        assert installed.can_load(installed_descriptor.source)
+        registry = PluginRegistry(mode="strict")
+        for item in discovered:
+            registry.register(item)
+        service = PluginService(registry=registry, loader=loader)
+        try:
+            assert service.get("lab:ordinary@1.0.0").call() == 1
+            assert service.get("lab:installed@1.0.0").call() == 1
+        finally:
+            service.shutdown("lab:ordinary@1.0.0")
+            service.shutdown("lab:installed@1.0.0")
+            service.close()
+
+
+def test_installed_isolated_plugin_executes_in_separate_worker(tmp_path, monkeypatch):
+    core = make_zip(tmp_path / "archives", "lab:core")
+    with zipfile.ZipFile(core) as original:
+        manifest = json.loads(original.read("manifest.json"))
+        code = original.read("plugin.py")
+    manifest["deps"] = {"mode": "online", "requirements": "requirements.txt"}
+    with zipfile.ZipFile(core, "w") as output:
+        output.writestr("manifest.json", json.dumps(manifest))
+        output.writestr("plugin.py", code)
+        output.writestr("requirements.txt", "")
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(core)
+    monkeypatch.setenv("INVARIANT_HOME", str(tmp_path / "envhome"))
+    with store.open_service() as service:
+        source = service.loader.sources[0]
+        assert isinstance(source, InstalledSource)
+        assert source.env_manager is service.env_manager
+        plugin = service.get("lab:core@1.0.0")
+        # The isolated proxy dispatches its named method to the worker.
+        assert plugin.call("call") == 1
+    assert list(store.leases.iterdir()) == []
+
+
+def test_installed_source_keeps_concrete_registry_version_on_direct_load(tmp_path):
+    archive = make_zip(tmp_path / "archives", "lab:core")
+    with zipfile.ZipFile(archive) as original:
+        manifest = json.loads(original.read("manifest.json"))
+        code = original.read("plugin.py")
+    manifest["version"] = "v1.0"
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("manifest.json", json.dumps(manifest))
+        output.writestr("plugin.py", code)
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(archive)
+    loader = PluginLoader([InstalledSource(store, store.plugin_roots())])
+    descriptor = loader.discover(mode="strict", fail_fast=True)[0]
+    assert descriptor.source.kind == "installed"
+    assert descriptor.meta.version == "v1.0"
+    # The runtime registry separately normalizes the concrete version.
+    plugin = loader.load(descriptor)
+    assert type(plugin).__name__ == "Core"
