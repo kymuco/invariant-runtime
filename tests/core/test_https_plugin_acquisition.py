@@ -248,3 +248,191 @@ def test_http_error_response_closes_without_reading_error_body(monkeypatch):
         ):
             pytest.fail("HTTPError must not yield a ZIP")
     assert response.closed
+
+
+def test_verified_installed_plugin_skips_network_and_returns_reused(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore
+
+    data = _plugin_zip("lab:core")
+    url = "https://plugins.example/core.zip"
+    fake = set_response(monkeypatch, data)
+    store = LocalPluginStore(tmp_path / "store")
+    request = dict(
+        store=store, ref="lab:core@1.0.0", url=url,
+        expected_sha256=hashlib.sha256(data).hexdigest(),
+        allowed_origins=["https://plugins.example"],
+    )
+    first = acq.install_verified_https_plugin(**request)
+    second = acq.install_verified_https_plugin(**request)
+    assert first["reused"] is False
+    assert second["reused"] is True
+    assert fake.calls == 1
+    assert len(list(store.objects.iterdir())) == 1
+    with store.open_service() as service:
+        assert service.get("lab:core@1.0.0").call() == 1
+
+
+def test_installed_dependency_can_be_promoted_without_redownload(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore
+
+    store = LocalPluginStore(tmp_path / "store")
+    core = _plugin_zip("lab:core")
+    voice = _plugin_zip("lab:voice", dependencies=["lab:core@1.0.0"])
+    c = tmp_path / "core.zip"
+    v = tmp_path / "voice.zip"
+    c.write_bytes(core)
+    v.write_bytes(voice)
+    store.install([c, v], roots=["lab:voice@1.0.0"])
+    assert store.state()["roots"] == ["lab:voice@1.0.0"]
+    fake = set_response(monkeypatch, core)
+    result = acq.install_verified_https_plugin(
+        store, "lab:core@1.0.0", "https://plugins.example/core.zip",
+        expected_sha256=hashlib.sha256(core).hexdigest(),
+        allowed_origins=["https://plugins.example"],
+    )
+    assert result["reused"] is True
+    assert fake.calls == 0
+    assert set(store.state()["roots"]) == {"lab:core@1.0.0", "lab:voice@1.0.0"}
+
+
+def test_cached_hit_still_rejects_disallowed_origin(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore
+
+    data = _plugin_zip("lab:core")
+    store = LocalPluginStore(tmp_path / "store")
+    archive = tmp_path / "core.zip"
+    archive.write_bytes(data)
+    store.install_zip(archive)
+    fake = set_response(monkeypatch, data)
+    with pytest.raises(acq.PluginAcquisitionError, match="origin not allowed"):
+        acq.install_verified_https_plugin(
+            store, "lab:core@1.0.0", "https://evil.example/core.zip",
+            expected_sha256=hashlib.sha256(data).hexdigest(),
+            allowed_origins=["https://plugins.example"],
+        )
+    assert fake.calls == 0
+
+
+def test_different_expected_archive_digest_cannot_skip_network(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore
+
+    data = _plugin_zip("lab:core")
+    store = LocalPluginStore(tmp_path / "store")
+    archive = tmp_path / "core.zip"
+    archive.write_bytes(data)
+    store.install_zip(archive)
+    # Valid ZIP, but different contents and identical plugin ID/version.
+    repacked = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as original:
+        with zipfile.ZipFile(repacked, "w") as changed:
+            for name in original.namelist():
+                payload = original.read(name)
+                if name == "plugin.py":
+                    payload = payload.replace(b"class Example", b"class Changed")
+                changed.writestr(name, payload)
+    different = repacked.getvalue()
+    fake = set_response(monkeypatch, different)
+    with pytest.raises(Exception, match="collision"):
+        acq.install_verified_https_plugin(
+            store, "lab:core@1.0.0", "https://plugins.example/core.zip",
+            expected_sha256=hashlib.sha256(different).hexdigest(),
+            allowed_origins=["https://plugins.example"],
+        )
+    assert fake.calls == 1
+    assert len(list(store.objects.iterdir())) == 1
+
+
+def test_downloaded_plugin_identity_must_match_requested_ref(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore, PluginStoreError
+
+    data = _plugin_zip("lab:other")
+    store = LocalPluginStore(tmp_path / "store")
+    fake = set_response(monkeypatch, data)
+    with pytest.raises(PluginStoreError, match="identity"):
+        acq.install_verified_https_plugin(
+            store, "lab:core@1.0.0", "https://plugins.example/archive.zip",
+            expected_sha256=hashlib.sha256(data).hexdigest(),
+            allowed_origins=["https://plugins.example"],
+        )
+    assert fake.calls == 1
+    assert store.state()["plugins"] == {}
+
+
+def test_modified_installed_artifact_fails_closed_before_network(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore, PluginStoreError
+
+    data = _plugin_zip("lab:core")
+    store = LocalPluginStore(tmp_path / "store")
+    archive = tmp_path / "core.zip"
+    archive.write_bytes(data)
+    store.install_zip(archive)
+    target = store.plugin_roots()[0] / "plugin.py"
+    target.chmod(0o644)
+    target.write_text("# corrupted", encoding="utf-8")
+    fake = set_response(monkeypatch, data)
+    with pytest.raises(PluginStoreError, match="modified"):
+        acq.install_verified_https_plugin(
+            store, "lab:core@1.0.0", "https://plugins.example/core.zip",
+            expected_sha256=hashlib.sha256(data).hexdigest(),
+            allowed_origins=["https://plugins.example"],
+        )
+    assert fake.calls == 0
+
+
+def test_two_concurrent_requests_with_same_digest_download_once(tmp_path, monkeypatch):
+    import concurrent.futures
+    import threading
+    from invariant.load.plugin_store import LocalPluginStore
+
+    data = _plugin_zip("lab:core")
+    store = LocalPluginStore(tmp_path / "store")
+    url = "https://plugins.example/core.zip"
+    counter = {"calls": 0}
+    mutex = threading.Lock()
+
+    class CountingOpener:
+        def open(self, request, timeout):
+            with mutex:
+                counter["calls"] += 1
+            return Response(data, request.full_url, length=len(data))
+
+    monkeypatch.setattr(acq.urllib.request, "build_opener", lambda *handlers: CountingOpener())
+    request = dict(
+        store=store, ref="lab:core@1.0.0", url=url,
+        expected_sha256=hashlib.sha256(data).hexdigest(),
+        allowed_origins=["https://plugins.example"],
+    )
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(acq.install_verified_https_plugin, **request) for _ in range(2)]
+        outcomes = [future.result(timeout=30) for future in futures]
+    assert counter["calls"] == 1
+    assert sorted(result["reused"] for result in outcomes) == [False, True]
+    assert len(list(store.objects.iterdir())) == 1
+
+
+def test_catalog_wrong_plugin_identity_rejected_before_cache_hit(tmp_path, monkeypatch):
+    from invariant.load.plugin_store import LocalPluginStore, PluginStoreError
+
+    data = _plugin_zip("lab:other")
+    store = LocalPluginStore(tmp_path / "store")
+    archive = tmp_path / "other.zip"
+    archive.write_bytes(data)
+    store.install_zip(archive)
+    old = store.state()
+    only_digest = old["plugins"]["lab:other@1.0.0"]
+    # The object and receipt are intact; only the catalog identity is wrong.
+    forged = {
+        "schema": 1,
+        "roots": ["lab:core@1.0.0"],
+        "plugins": {"lab:core@1.0.0": only_digest},
+    }
+    store.catalog.write_text(json.dumps(forged), encoding="utf-8")
+    fake = set_response(monkeypatch, data)
+    with pytest.raises(PluginStoreError, match="catalog plugin identity mismatch"):
+        acq.install_verified_https_plugin(
+            store, "lab:core@1.0.0", "https://plugins.example/core.zip",
+            expected_sha256=hashlib.sha256(data).hexdigest(),
+            allowed_origins=["https://plugins.example"],
+        )
+    assert fake.calls == 0
+    assert store.state() == forged

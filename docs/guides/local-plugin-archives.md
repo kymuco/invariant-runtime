@@ -96,6 +96,41 @@ inside a downloaded plugin; a SHA-256 does not itself establish publisher
 trust. A URL obtained from an untrusted catalog cannot also serve as the
 trusted source of the expected digest.
 
+## Skip redundant HTTPS downloads (internal)
+
+When a host already has an independently trusted archive SHA-256 and exact
+plugin reference, use the explicit installation helper to **reuse** an intact
+installation without issuing a second HTTP request:
+
+```python
+from invariant.load.acquisition import install_verified_https_plugin
+
+result = install_verified_https_plugin(
+    store,
+    "example:voice-a@1.0.0",
+    "https://plugins.example/voice-a.zip",
+    expected_sha256=expected_sha256,
+    allowed_origins={"https://plugins.example"},
+)
+assert "reused" in result  # True when no network transfer was needed
+```
+
+The helper first validates URL/origin policy, then under a per-archive lock
+checks the installed plugin's exact ID/version, its stored original-archive
+SHA-256 and its current file hashes. Identical concurrent requests through
+this helper share one download. When the plugin was already installed as
+another plugin's dependency, a successful cache hit also registers it as an
+installation root without downloading.
+
+If the archive SHA-256 is unknown, differs (including repackaged ZIPs), or
+the requested version is absent, a normal HTTPS download and Store install
+are required. Modified installed files **fail closed** rather than being
+silently replaced; the helper does not repair them. The checked digest is
+recorded by this Store, not cryptographic proof against a compromised host
+filesystem. No marketplace search or dependency-resolution download is
+performed implicitly. A host must explicitly authorize each URL and provide
+its trusted digest.
+
 ## Session lifetime and removal
 
 Use `with store.open_service()` for the entire lifetime of the objects you obtain from it. The session holds an on-disk consumer lease and shuts managed instances down before releasing that lease. Do not use returned plugin objects after the `with` block or leave execution-scoped contexts running beyond it.

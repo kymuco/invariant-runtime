@@ -352,7 +352,8 @@ class LocalPluginStore:
             _write_json_atomic(self.catalog, new_state)
             return {"new_objects": newly_installed, "installed": list(new_state["plugins"])}
 
-    def install_zip(self, archive: Path, *, expected_sha256: str | None = None) -> dict:
+    def install_zip(self, archive: Path, *, expected_sha256: str | None = None,
+                    expected_ref: str | None = None) -> dict:
         """Explicitly install a single local plugin ZIP as a root.
 
         The archive's strict manifest supplies the concrete plugin identity.
@@ -364,8 +365,51 @@ class LocalPluginStore:
         """
         archive = Path(archive)
         candidate = _candidate(archive, expected_sha256)
+        if expected_ref is not None and _reference(expected_ref) != candidate.ref:
+            raise PluginStoreError("downloaded plugin identity does not match requested ref")
         digests = {archive.name: expected_sha256} if expected_sha256 is not None else None
         return self.install([archive], roots=[candidate.ref], expected_sha256=digests)
+
+    def reuse_verified_archive(self, ref: str, expected_sha256: str) -> dict | None:
+        """Reuse only an intact installed object with the exact ZIP digest.
+
+        Exact ID/version alone does not authorize skipping a download: the
+        stored receipt must record the independently trusted archive SHA-256.
+        A hit also pins the requested ref as an installation root atomically.
+        Unknown/mismatching digests return None; corruption raises.
+        """
+        ref = _reference(ref)
+        if not isinstance(expected_sha256, str) or not _SHA256.fullmatch(expected_sha256.lower()):
+            raise PluginStoreError("expected archive SHA-256 must be 64 hex characters")
+        with self._lock:
+            state = self._read_state()
+            digest = state["plugins"].get(ref)
+            if digest is None:
+                return None
+            self._verify_object(digest)
+            # Object integrity alone cannot prove that the catalog maps this
+            # requested ID/version to the correct plugin manifest.
+            manifest = json.loads((self.objects / digest / "manifest.json").read_text(encoding="utf-8"))
+            if _reference(f"{manifest['id']}@{manifest['version']}") != ref:
+                raise PluginStoreError("catalog plugin identity mismatch")
+            receipt = json.loads((self.objects / digest / _RECEIPT).read_text(encoding="utf-8"))
+            if receipt.get("archive_sha256") != expected_sha256.lower():
+                return None
+            if ref in state["roots"]:
+                # Fast path: verify the selected object's bytes, not every
+                # unrelated installed plugin merely to skip a network fetch.
+                return {"new_objects": [], "installed": list(state["plugins"]), "reused": True}
+            manifests = self._manifests(state["plugins"])
+            roots = set(state["roots"]) | {ref}
+            reachable = self._closure(roots, manifests)
+            updated = {
+                "schema": 1,
+                "roots": sorted(roots),
+                "plugins": {key: state["plugins"][key] for key in sorted(reachable)},
+            }
+            if updated != state:
+                _write_json_atomic(self.catalog, updated)
+            return {"new_objects": [], "installed": list(updated["plugins"]), "reused": True}
 
     def plugin_roots(self) -> list[Path]:
         """Paths for the existing PluginService.from_manifest_paths interface."""
