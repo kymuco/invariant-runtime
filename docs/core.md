@@ -108,6 +108,9 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 
 - `ManifestSource` and `FilesystemSource` are implemented.
 - `EntrypointSource`, `ZipSource`, and `RemoteSource` remain incomplete/stubbed.
+- The internal `LocalPluginStore` can explicitly install local ZIP artifacts and
+  share installed plugin dependencies. This is distinct from `ZipSource` discovery;
+  see [Install local plugin ZIPs](guides/local-plugin-archives.md).
 
 ## Alpha readiness and operational guarantees
 

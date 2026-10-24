@@ -352,6 +352,21 @@ class LocalPluginStore:
             _write_json_atomic(self.catalog, new_state)
             return {"new_objects": newly_installed, "installed": list(new_state["plugins"])}
 
+    def install_zip(self, archive: Path, *, expected_sha256: str | None = None) -> dict:
+        """Explicitly install a single local plugin ZIP as a root.
+
+        The archive's strict manifest supplies the concrete plugin identity.
+        Already-installed plugin dependencies are reused from the same Store;
+        missing required dependencies are not downloaded or auto-installed.
+        For a new dependency, the host must provide/install its ZIP separately.
+        This internal convenience method delegates validation and publication
+        to install(), without defining a second extraction path.
+        """
+        archive = Path(archive)
+        candidate = _candidate(archive, expected_sha256)
+        digests = {archive.name: expected_sha256} if expected_sha256 is not None else None
+        return self.install([archive], roots=[candidate.ref], expected_sha256=digests)
+
     def plugin_roots(self) -> list[Path]:
         """Paths for the existing PluginService.from_manifest_paths interface."""
         with self._lock:

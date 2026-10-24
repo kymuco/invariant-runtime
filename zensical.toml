@@ -23,6 +23,7 @@ nav = [
   { "Guides" = [
     { "Plugin authoring" = "guides/plugin-authoring.md" },
     { "Dependencies and capabilities" = "guides/dependencies-and-capabilities.md" },
+    { "Install local plugin ZIPs (internal)" = "guides/local-plugin-archives.md" },
   ] },
   { "Reference" = [
     { "Public API" = "reference/public-api.md" },
