@@ -162,6 +162,11 @@ digest authenticates bytes only relative to the host's trusted expected digest.
 See [Plugin Catalog v1](../reference/plugin-catalog-v1.md) for the schema and
 trust boundary.
 
+For a publisher/channel with consecutive catalog editions, use
+[Trusted catalog updates](../reference/plugin-catalog-updates.md) to admit
+independently pinned update metadata and persist anti-rollback state before
+feeding its `VerifiedPluginCatalog` to the same planner.
+
 ## Host-approved installation plan (internal)
 
 A host can preview a **finite set of exact plugin versions** before requesting
