@@ -51,7 +51,7 @@ class PluginService:
         if isinstance(srcs, list):
             for src in srcs:
                 try:
-                    if getattr(src, "kind", None) == "manifest" and getattr(src, "env_manager", None) is None:
+                    if getattr(src, "kind", None) in {"manifest", "zip"} and getattr(src, "env_manager", None) is None:
                         src.env_manager = self.env_manager
                 except Exception:
                     pass
@@ -115,15 +115,30 @@ class PluginService:
         if not paths:
             raise ValueError("search_paths must contain at least one path")
 
-        # Keep loader/registry/source machinery behind the public facade. They remain
-        # implementation-level surfaces in the 0.1 compatibility contract.
-        from invariant.catalog.registry import PluginRegistry
-        from invariant.load.loader import PluginLoader
         from invariant.load.sources.manifest import ManifestSource
 
-        registry = PluginRegistry(mode="strict")
-        loader = PluginLoader([ManifestSource(paths)])
+        return cls._from_sources(
+            [ManifestSource(paths)],
+            include_unstable=include_unstable,
+            fail_fast=fail_fast,
+            tracer=tracer,
+        )
 
+    @classmethod
+    def _from_sources(
+        cls,
+        sources,
+        *,
+        include_unstable: bool = False,
+        fail_fast: bool = True,
+        tracer: Any | None = None,
+    ) -> Self:
+        """Internal construction shared by manifest paths and installed ZIPs."""
+        from invariant.catalog.registry import PluginRegistry
+        from invariant.load.loader import PluginLoader
+
+        registry = PluginRegistry(mode="strict")
+        loader = PluginLoader(list(sources))
         descriptors = loader.discover(
             include_unstable=include_unstable,
             mode="strict",
@@ -131,7 +146,6 @@ class PluginService:
         )
         for descriptor in descriptors:
             registry.register(descriptor)
-
         return cls(registry=registry, loader=loader, tracer=tracer)
 
     # ---------- inventory ----------

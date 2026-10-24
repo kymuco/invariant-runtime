@@ -546,7 +546,7 @@ def test_open_service_construct_failure_releases_lease(tmp_path, monkeypatch):
     def raise_during_discover(*args, **kwargs):
         assert len(list(store.leases.iterdir())) == 1
         raise RuntimeError('discovery failed')
-    monkeypatch.setattr(PluginService, 'from_manifest_paths', raise_during_discover)
+    monkeypatch.setattr(PluginService, '_from_sources', raise_during_discover)
     with pytest.raises(RuntimeError, match='discovery failed'):
         with store.open_service():
             pytest.fail('should not reach service body')

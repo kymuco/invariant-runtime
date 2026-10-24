@@ -14,6 +14,9 @@ class PluginSource(ABC):
     """
 
     kind: str  # every source should define it
+    # Opt in only if load() itself validates provenance and constructs
+    # isolated plugins. Other sources keep PluginLoader's legacy proxy path.
+    handles_isolated_load: bool = False
 
     @abstractmethod
     def discover(
