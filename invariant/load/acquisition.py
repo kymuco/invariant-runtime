@@ -42,7 +42,7 @@ def _https_origin(value: str, *, origin_only: bool = False) -> str:
         host = parsed.hostname
         if not host.isascii() or "%" in host:  # Use punycode for IDNs; reject IPv6 zone IDs.
             raise PluginAcquisitionError("non-ASCII or scoped HTTPS hostname")
-        port = parsed.port or 443
+        port = 443 if parsed.port is None else parsed.port
         if port <= 0:
             raise PluginAcquisitionError("invalid HTTPS port")
     except ValueError as exc:
