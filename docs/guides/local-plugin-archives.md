@@ -82,7 +82,7 @@ Never pass that confirmation while any host might still be using bare `plugin_ro
 
 A local ZIP is still executable Python code. **The Store is not a sandbox for malicious plugins.** Use only trusted archives; SHA-256 verifies exact bytes when an independently trusted digest is supplied, but it does not establish trust by itself. Read [Security](../security.md).
 
-The runtime now uses `ZipSource` to discover and load **installed** ZIP-origin plugins through `PluginLoader` when a host enters `store.open_service()`. It uses a lease-pinned snapshot: the original ZIP may be removed after installation. ZIP discovery never extracts or installs an archive. `ZipSource` is not a direct loader for arbitrary ZIP paths, and `RemoteSource` remains incomplete. URLs and marketplaces are not implemented. Future acquisition sources should deliver verified local artifacts to the same Store, with any download or installation explicitly authorized by the host.
+The runtime uses an internal `InstalledSource` to discover and load **installed objects** through `PluginLoader` when a host enters `store.open_service()`. The original ZIP may be removed after installation; the source works from a lease-pinned snapshot. Installation and execution are distinct: `InstalledSource.discover()` and `load()` never extract or fetch an archive. The separate `ZipSource` remains a stub for direct ZIP-path loading, and `RemoteSource` remains incomplete. URLs/marketplaces are not implemented. Future acquisition sources should deliver verified local artifacts to this same Store after the host has explicitly authorized installation.
 
 ## Next
 

@@ -37,7 +37,7 @@ class PluginLoader:
         # Loader owns isolated-environment configuration even when used without
         # the higher-level PluginService facade.
         for source in self.sources:
-            if (getattr(source, "kind", None) in {"manifest", "zip"}
+            if (getattr(source, "kind", None) in {"manifest", "installed"}
                     and getattr(source, "env_manager", None) is None):
                 source.env_manager = self._env_manager
 
@@ -140,6 +140,7 @@ class PluginLoader:
         """
 
         SOURCE_RANK: dict[str, int] = {
+            "installed": 60,
             "manifest": 50,
             "entrypoint": 40,
             "filesystem": 30,

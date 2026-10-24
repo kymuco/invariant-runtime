@@ -17,6 +17,7 @@ class PluginSourceSpec:
         "filesystem",
         "entrypoint",
         "manifest",
+        "installed",
         "zip",
         "api",
     ]
@@ -51,7 +52,7 @@ class PluginSourceSpec:
             if not self.entry_point:
                 raise ValueError("entrypoint source requires entry_point")
 
-        elif k == "manifest":
+        elif k in {"manifest", "installed"}:
             # depends on your manifest model; keep minimal
             # must have at least module+class_name OR entry_point OR path
             if not (self.entry_point or (self.module and self.class_name) or self.path):

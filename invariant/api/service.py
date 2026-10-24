@@ -51,7 +51,7 @@ class PluginService:
         if isinstance(srcs, list):
             for src in srcs:
                 try:
-                    if getattr(src, "kind", None) in {"manifest", "zip"} and getattr(src, "env_manager", None) is None:
+                    if getattr(src, "kind", None) in {"manifest", "installed"} and getattr(src, "env_manager", None) is None:
                         src.env_manager = self.env_manager
                 except Exception:
                     pass
