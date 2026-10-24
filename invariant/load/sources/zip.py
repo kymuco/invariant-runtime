@@ -19,6 +19,7 @@ from invariant.spec.descriptor import PluginDescriptor
 from invariant.spec.errors import PluginLoadError
 from invariant.spec.plugin import BasePlugin
 from invariant.spec.source import PluginSourceSpec
+from invariant.spec.versioning import canon_version_key
 
 if TYPE_CHECKING:
     from invariant.load.env.env_manager import EnvManager
@@ -125,7 +126,7 @@ class ZipSource(PluginSource):
         parser = ManifestSource([], env_manager=self.env_manager)
         canonical = parser._read_manifest(Path(raw_root) / "manifest.json", dev_mode=False)
         if (
-            descriptor.meta != canonical.meta
+            descriptor.meta != replace(canonical.meta, version=canon_version_key(canonical.meta.version))
             or source.path != canonical.source.path
             or source.module != canonical.source.module
             or source.class_name != canonical.source.class_name
