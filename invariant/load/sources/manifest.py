@@ -36,7 +36,7 @@ class ManifestSource(PluginSource):
     - module_name вычисляется стабильно из plugin id + version
     """
 
-    kind: Literal["manifest"] = "manifest"
+    kind: Literal["manifest", "installed"] = "manifest"
 
     def __init__(self, search_paths: list[Path | str], *, env_manager: EnvManager | None = None):
         self.search_paths = [Path(p).resolve() for p in search_paths]
