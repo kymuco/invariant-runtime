@@ -145,7 +145,7 @@ def test_duplicate_keys_and_invalid_json_are_rejected(tmp_path):
 def test_freshness_and_30_day_lifetime(tmp_path, issued, expires):
     c = payload()
     m = metadata(1, c, issued=issued, expires=expires)
-    with pytest.raises(CatalogUpdateError, match="not yet valid, expired, or valid"):
+    with pytest.raises(CatalogUpdateError, match="not yet valid or expired|validity must"):
         accept(journal(tmp_path), m, c, bootstrap=True)
 
 
@@ -224,3 +224,32 @@ def test_offline_admission_does_not_contact_network(tmp_path, monkeypatch):
     accepted = accept(j, metadata(1, c), c, bootstrap=True)
     assert accepted.catalog.offers == ()
     j.assert_current(accepted, now=NOW)
+
+
+def test_expiry_rechecked_after_waiting_for_checkpoint_lock(tmp_path, monkeypatch):
+    import invariant.load.catalog_update as catalog_update
+
+    j = journal(tmp_path)
+    catalog = payload()
+    envelope = metadata(1, catalog, expires=NOW + timedelta(minutes=1))
+    accepted = accept(j, envelope, catalog, bootstrap=True)
+    # Simulate contention: the lock is acquired after the trusted clock has
+    # advanced beyond the expiration. Sampling it before waiting is unsafe.
+    clock = [NOW + timedelta(seconds=30)]
+
+    class DelayedLock:
+        def __enter__(self):
+            clock[0] = NOW + timedelta(minutes=2)
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    old_now = catalog_update._now
+    monkeypatch.setattr(catalog_update, "_now", lambda value: old_now(clock[0] if value is None else value))
+    j._lock = DelayedLock()
+    with pytest.raises(CatalogUpdateError, match="expired"):
+        j.assert_current(accepted)
+    with pytest.raises(CatalogUpdateError, match="expired"):
+        j.admit(
+            envelope, catalog,
+            trusted_metadata_sha256=hashlib.sha256(envelope).hexdigest(),
+        )
