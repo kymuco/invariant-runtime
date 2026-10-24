@@ -213,3 +213,48 @@ def test_zip_load_rehashes_only_selected_object(tmp_path, monkeypatch):
         # whole Store on each plugin load.
         assert len(visited) == 2
         assert len(set(visited)) == 2
+
+
+def test_direct_discovery_load_accepts_uncanonical_version(tmp_path):
+    archive = make_zip(tmp_path, "lab:core")
+    with zipfile.ZipFile(archive) as original:
+        manifest = json.loads(original.read("manifest.json"))
+        code = original.read("plugin.py")
+    manifest["version"] = "v1.0"
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("manifest.json", json.dumps(manifest))
+        output.writestr("plugin.py", code)
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(archive)
+    loader = PluginLoader([ZipSource(store=store)])
+    descriptor = loader.discover(mode="strict", fail_fast=True)[0]
+    assert descriptor.meta.version == "v1.0"
+    instance = loader.load(descriptor)
+    assert type(instance).__name__ == "Core"
+
+
+def test_isolated_zip_rejects_tampering_before_worker_or_env_setup(tmp_path, monkeypatch):
+    archive = make_zip(tmp_path, "lab:core")
+    with zipfile.ZipFile(archive) as original:
+        manifest = json.loads(original.read("manifest.json"))
+        code = original.read("plugin.py")
+    manifest["deps"] = {"mode": "online", "requirements": "requirements.txt"}
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("manifest.json", json.dumps(manifest))
+        output.writestr("plugin.py", code)
+        output.writestr("requirements.txt", "# no external deps\n")
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(archive)
+    loader = PluginLoader([ZipSource(store=store)])
+    descriptor = loader.discover(mode="strict", fail_fast=True)[0]
+    from invariant.load.isolated_proxy import IsolatedPluginProxy
+
+    def unexpected_worker(*args, **kwargs):
+        pytest.fail("isolated worker bypassed ZipSource provenance verification")
+
+    monkeypatch.setattr(IsolatedPluginProxy, "from_descriptor", unexpected_worker)
+    target = store.objects / store.state()["plugins"]["lab:core@1.0.0"] / "plugin.py"
+    target.chmod(0o644)
+    target.write_text("# corrupted after discovery\n", encoding="utf-8")
+    with pytest.raises(PluginStoreError, match="installed plugin file modified"):
+        loader.load(descriptor)
