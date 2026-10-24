@@ -157,3 +157,59 @@ def test_zip_source_maturity_filter_uses_manifest_policy(tmp_path):
     assert [d.meta.id for d in source.discover(include_unstable=True)] == ["lab:core"]
     with store.open_service(include_unstable=True) as service:
         assert service.has_plugin("lab:core@1.0.0")
+
+
+def test_loader_routes_each_zip_descriptor_to_its_own_store(tmp_path):
+    from invariant.catalog.registry import PluginRegistry
+
+    archive_a = make_zip(tmp_path / "a", "lab:core-a")
+    archive_b = make_zip(tmp_path / "b", "lab:core-b")
+    store_a = LocalPluginStore(tmp_path / "store-a")
+    store_b = LocalPluginStore(tmp_path / "store-b")
+    store_a.install_zip(archive_a)
+    store_b.install_zip(archive_b)
+    first = ZipSource(store=store_a)
+    second = ZipSource(store=store_b)
+    loader = PluginLoader([first, second])
+    descriptors = loader.discover(mode="strict", fail_fast=True)
+    assert len(descriptors) == 2
+    assert first.can_load(next(d.source for d in descriptors if d.meta.id == "lab:core-a"))
+    assert not first.can_load(next(d.source for d in descriptors if d.meta.id == "lab:core-b"))
+    assert second.can_load(next(d.source for d in descriptors if d.meta.id == "lab:core-b"))
+    registry = PluginRegistry(mode="strict")
+    for descriptor in descriptors:
+        registry.register(descriptor)
+    service = PluginService(registry=registry, loader=loader)
+    try:
+        assert service.get("lab:core-a@1.0.0").call() == 1
+        assert service.get("lab:core-b@1.0.0").call() == 1
+    finally:
+        # Explicit managed shutdown keeps this internal test lifecycle correct.
+        service.shutdown("lab:core-a@1.0.0")
+        service.shutdown("lab:core-b@1.0.0")
+        service.close()
+
+
+def test_zip_load_rehashes_only_selected_object(tmp_path, monkeypatch):
+    source_root = tmp_path / "archives"
+    core = make_zip(source_root, "lab:core")
+    voice = make_zip(source_root, "lab:voice", dependency="lab:core@1.0.0")
+    store = LocalPluginStore(tmp_path / "store")
+    store.install_zip(core)
+    store.install_zip(voice)
+    visited = []
+    original = store._verify_object
+
+    def record_verification(digest):
+        visited.append(digest)
+        return original(digest)
+
+    monkeypatch.setattr(store, "_verify_object", record_verification)
+    with store.open_service() as service:
+        # Snapshot validation is allowed to inspect all objects.
+        visited.clear()
+        assert service.get("lab:voice@1.0.0").use() == 1
+        # Each activated instance verifies its own object once, not the
+        # whole Store on each plugin load.
+        assert len(visited) == 2
+        assert len(set(visited)) == 2
