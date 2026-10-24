@@ -149,7 +149,6 @@ class CatalogUpdateJournal:
         must advance exactly one sequence and link to the previous catalog
         digest. Identical, unexpired metadata may be replayed idempotently.
         """
-        now = _now(now)
         if not isinstance(metadata, bytes) or not 0 < len(metadata) <= _MAX_METADATA_BYTES:
             raise CatalogUpdateError("catalog update metadata must be 1..4096 bytes")
         trusted_hash = _sha(trusted_metadata_sha256, "trusted metadata SHA-256")
@@ -170,8 +169,8 @@ class CatalogUpdateJournal:
             previous = _sha(previous, "previous catalog SHA-256")
         issued = _timestamp(doc["issued_at"], "issued_at")
         expires = _timestamp(doc["expires_at"], "expires_at")
-        if issued > now or expires <= now or expires <= issued or expires - issued > _MAX_VALIDITY:
-            raise CatalogUpdateError("catalog metadata not yet valid, expired, or valid for over 30 days")
+        if expires <= issued or expires - issued > _MAX_VALIDITY:
+            raise CatalogUpdateError("catalog metadata validity must be positive and at most 30 days")
         # Reuse the existing strict, digest-bound catalog parser; an untrusted
         # metadata envelope can never introduce a second catalog schema.
         try:
@@ -182,6 +181,10 @@ class CatalogUpdateJournal:
 
         self.home.mkdir(parents=True, exist_ok=True)
         with self._lock:
+            # Clock freshness is checked *after* waiting for any other writer.
+            now = _now(now)
+            if issued > now or expires <= now:
+                raise CatalogUpdateError("catalog metadata not yet valid or expired")
             state = self._read()
             if state is None:
                 if not bootstrap or sequence != 1 or previous is not None:
@@ -217,10 +220,10 @@ class CatalogUpdateJournal:
         Hosts should call this before planning AND before applying a plan.
         This is a point-in-time check, not a lock across network operations.
         """
-        now = _now(now)
         if not isinstance(accepted, AcceptedCatalogUpdate):
             raise CatalogUpdateError("expected an accepted catalog update")
         with self._lock:
+            now = _now(now)  # Sample default host clock after lock contention.
             state = self._read()
             if state is None:
                 raise CatalogUpdateError("no catalog update checkpoint")
