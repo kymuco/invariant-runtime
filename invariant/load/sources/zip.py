@@ -36,6 +36,7 @@ class ZipSource(PluginSource):
     """
 
     kind = "zip"
+    handles_isolated_load = True
 
     def __init__(
         self,
@@ -138,7 +139,8 @@ class ZipSource(PluginSource):
         parser = ManifestSource([], env_manager=self.env_manager)
         canonical = parser._read_manifest(Path(raw_root) / "manifest.json", dev_mode=False)
         if (
-            descriptor.meta != replace(canonical.meta, version=canon_version_key(canonical.meta.version))
+            replace(descriptor.meta, version=canon_version_key(descriptor.meta.version))
+            != replace(canonical.meta, version=canon_version_key(canonical.meta.version))
             or source.path != canonical.source.path
             or source.module != canonical.source.module
             or source.class_name != canonical.source.class_name
