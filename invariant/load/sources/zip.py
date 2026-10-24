@@ -52,6 +52,8 @@ class ZipSource(PluginSource):
         self.store = store
         self._snapshot = tuple(Path(path) for path in installed_roots) if installed_roots is not None else None
         self.env_manager = env_manager
+        # Populated by discover(): used for ownership-aware source dispatch.
+        self._known_roots: frozenset[Path] = frozenset()
 
     def _roots(self) -> list[Path]:
         if self.store is None:
@@ -77,7 +79,12 @@ class ZipSource(PluginSource):
         **kwargs: Any,
     ) -> list[PluginDescriptor]:
         result: list[PluginDescriptor] = []
-        for root in self._roots():
+        roots = self._roots()
+        # Update ownership even for an empty discovery. Individual artifact
+        # identity is still verified on load, but unrelated objects need not
+        # be rehashed with every plugin activation.
+        self._known_roots = frozenset(root.resolve() for root in roots)
+        for root in roots:
             parser = ManifestSource([root], env_manager=self.env_manager)
             try:
                 # One installed object = one plugin. Nested manifests inside
@@ -106,7 +113,10 @@ class ZipSource(PluginSource):
         return result
 
     def can_load(self, source: PluginSourceSpec) -> bool:
-        return source.kind == self.kind
+        if source.kind != self.kind:
+            return False
+        root = (source.extra or {}).get("plugin_root")
+        return isinstance(root, str) and Path(root).resolve() in self._known_roots
 
     def load(
         self,
@@ -116,12 +126,14 @@ class ZipSource(PluginSource):
         descriptor: PluginDescriptor | None = None,
         **kwargs: Any,
     ) -> BasePlugin:
-        if not self.can_load(source) or descriptor is None or self.store is None:
-            raise PluginLoadError("ZIP loading requires an installed, registered descriptor")
-        raw_root = (source.extra or {}).get("plugin_root")
-        roots = self._roots()
-        if not isinstance(raw_root, str) or not any(Path(raw_root).resolve() == root.resolve() for root in roots):
+        if descriptor is None or self.store is None or not self.can_load(source):
             raise PluginLoadError("ZIP descriptor is not installed in this PluginStore")
+        raw_root = (source.extra or {}).get("plugin_root")
+        assert isinstance(raw_root, str)
+        # Revalidate only the selected object. The full pinned snapshot was
+        # verified at lease acquisition and source discovery.
+        selected = Path(raw_root).resolve()
+        self.store._verify_object(selected.name)
         # Reject invented code paths/classes, not just invented plugin roots.
         parser = ManifestSource([], env_manager=self.env_manager)
         canonical = parser._read_manifest(Path(raw_root) / "manifest.json", dev_mode=False)
