@@ -438,16 +438,16 @@ class LocalPluginStore:
         other callers using unleased plugin_roots().
         """
         from invariant.api import PluginService
-        from invariant.load.sources.zip import ZipSource
+        from invariant.load.sources.installed import InstalledSource
 
         control = _LeaseControl()
         with self.leased_plugin_roots(_control=control) as paths:
             if not paths:
                 raise ValueError("search_paths must contain at least one path")
             # A lease protects this exact snapshot even if another process
-            # changes the catalog before ZipSource performs discovery.
+            # changes the catalog before installed manifest discovery.
             service = PluginService._from_sources(
-                [ZipSource(store=self, installed_roots=paths)],
+                [InstalledSource(self, paths)],
                 include_unstable=include_unstable,
                 fail_fast=fail_fast,
                 tracer=tracer,

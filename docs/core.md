@@ -107,12 +107,15 @@ Version ranges/specifier expressions are deliberately outside this concrete-vers
 ## Source status
 
 - `ManifestSource` and `FilesystemSource` support direct local discovery.
-- `ZipSource` discovers and loads **already-installed local ZIP artifacts**
-  through `PluginLoader`, using `ManifestSource` for validated materialized
-  Python modules. Acquisition and installation remain explicit Store actions.
-- `EntrypointSource` and `RemoteSource` remain incomplete/stubbed.
-- The internal `LocalPluginStore` owns content-addressed ZIP installation,
-  dependency deduplication and leases; see [Install local plugin ZIPs](guides/local-plugin-archives.md).
+- `LocalPluginStore` explicitly acquires local ZIP artifacts and owns
+  content-addressed installation, dependency deduplication, and leases.
+- `InstalledSource` discovers and activates **verified installed objects**
+  through `PluginLoader`. Their runtime source kind is `installed`,
+  independently of how the files were delivered. Manifest v1 parsing and
+  isolated worker support are reused from `ManifestSource`.
+- `ZipSource` remains a stub for direct archive-path discovery/loading;
+  `EntrypointSource` and `RemoteSource` also remain incomplete.
+  See [Install local plugin ZIPs](guides/local-plugin-archives.md).
 
 ## Alpha readiness and operational guarantees
 
