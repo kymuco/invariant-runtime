@@ -34,6 +34,11 @@ class PluginLoader:
     def __init__(self, sources: list[PluginSource], *, env_manager: EnvManager | None = None):
         self.sources = sources
         self._env_manager = env_manager or EnvManager()
+        # Loader owns isolated-environment configuration even when used without
+        # the higher-level PluginService facade.
+        for source in self.sources:
+            if hasattr(source, "env_manager") and source.env_manager is None:
+                source.env_manager = self._env_manager
 
     def discover(
         self,
@@ -92,7 +97,7 @@ class PluginLoader:
         deps = self._deps_from_descriptor(descriptor)
         for src in self.sources:
             if src.can_load(descriptor.source):
-                if deps is not None and deps.is_isolated() and not src.handles_isolated_load:
+                if deps is not None and deps.is_isolated() and not getattr(src, "handles_isolated_load", False):
                     # Legacy sources delegate isolated execution to the loader.
                     logger.info("Loading isolated plugin %s mode=%s", descriptor.meta.id, deps.mode)
                     return IsolatedPluginProxy.from_descriptor(
