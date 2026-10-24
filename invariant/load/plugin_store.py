@@ -183,6 +183,11 @@ def _write_json_atomic(dest: Path, value: dict) -> None:
         Path(tmp).unlink(missing_ok=True)
 
 
+def _catalog_fingerprint(state: dict) -> str:
+    """Content-based catalog snapshot identity for approved install plans."""
+    return hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 class LocalPluginStore:
     """Internal store; ZIPs and pinned roots are always supplied locally.
 
@@ -277,7 +282,8 @@ class LocalPluginStore:
         return visited
 
     def install(self, archives: Iterable[Path], *, roots: Iterable[str],
-                expected_sha256: dict[str, str] | None = None) -> dict:
+                expected_sha256: dict[str, str] | None = None,
+                expected_catalog_sha256: str | None = None) -> dict:
         """Install only explicit local ZIPs; commit catalog after all objects.
 
         For a repeat root, accepts no archives if dependencies are installed.
@@ -295,6 +301,8 @@ class LocalPluginStore:
         roots = {_reference(ref) for ref in roots}
         with self._lock:
             current = self._read_state()
+            if expected_catalog_sha256 is not None and _catalog_fingerprint(current) != expected_catalog_sha256:
+                raise PluginStoreError("plugin Store catalog changed since plan approval")
             merged = dict(current["plugins"])
             for ref, candidate in candidates.items():
                 if ref in merged and merged[ref] != candidate.content_sha:

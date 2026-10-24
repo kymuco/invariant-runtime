@@ -131,6 +131,58 @@ filesystem. No marketplace search or dependency-resolution download is
 performed implicitly. A host must explicitly authorize each URL and provide
 its trusted digest.
 
+## Host-approved installation plan (internal)
+
+A host can preview a **finite set of exact plugin versions** before requesting
+approval. Offers must come from host-trusted metadata, not arbitrary
+unverified marketplace listings. The planner does not fetch catalogs or solve
+version ranges; every required dependency must have an exact `id@version`.
+
+```python
+from invariant.load.installation_plan import ArtifactOffer, PluginInstallationPlanner
+
+offers = [
+    ArtifactOffer(
+        ref="example:audio-core@1.0.0",
+        url="https://plugins.example/audio-core.zip",
+        sha256="<trusted-64-digit-SHA256>",
+    ),
+    ArtifactOffer(
+        ref="example:voice-a@1.0.0",
+        url="https://plugins.example/voice-a.zip",
+        sha256="<another-trusted-SHA256>",
+        dependencies=("example:audio-core@1.0.0",),
+    ),
+]
+planner = PluginInstallationPlanner(
+    store, offers, allowed_origins={"https://plugins.example"},
+)
+plan = planner.plan(["example:voice-a@1.0.0"])
+print(plan.installed)   # Intact local dependencies
+print(plan.downloads)   # ZIP offers needing explicit acquisition
+
+# The application obtains actual human/host authorization for this exact
+# plan_id before invoking apply(). Replace SHA-256 placeholders above.
+result = planner.apply(plan, approved_plan_id=plan.plan_id)
+```
+
+`plan()` is read-only with respect to plugin installation and makes no
+network requests. The host **must** present the plan and obtain approval:
+passing `plan_id` programmatically is not human consent. The plan digest
+binds chosen roots, artifact URLs/digests, required dependencies, origin
+policy, and the current Store catalog snapshot. If the catalog changes,
+approval must be obtained again.
+
+The planner downloads all missing ZIPs into temporary storage, validates each
+archive's real identity and required dependencies against the approved offers,
+then calls **one** `LocalPluginStore.install()` for the full graph. The Store
+guards its catalog transaction against concurrent changes. A failed download
+does not publish a partial install; failed Store publication may leave
+unreferenced object files for guarded manual cleanup. Optional plugin
+dependencies and host-granted capabilities are outside this installation graph.
+This is an internal, bounded exact-version planner—not a marketplace,
+untrusted-plugin sandbox, or automatic dependency resolver.
+
 ## Session lifetime and removal
 
 Use `with store.open_service()` for the entire lifetime of the objects you obtain from it. The session holds an on-disk consumer lease and shuts managed instances down before releasing that lease. Do not use returned plugin objects after the `with` block or leave execution-scoped contexts running beyond it.
