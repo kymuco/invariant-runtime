@@ -20,7 +20,9 @@ python -m pip install invariant-runtime==0.1.1a1
 python -c "import invariant; print(invariant.__version__)"
 ```
 
-The version pin explicitly selects the alpha release. You do **not** need to clone this repository to use Invariant in your own application.
+The version pin selects the **last published** alpha. This source tree stages a later `0.1.2a1` candidate, **not available on PyPI until separately released**. Its ZIP installation, Plugin Store, HTTPS acquisition, planner, and catalog update helpers are internal `invariant.load` integrations rather than supported public `invariant.api` exports. You do **not** need to clone this repository to use the published alpha.
+
+[Release candidate scope and verification](docs/alpha-candidate-0.1.2a1.md).
 
 To run the included example application, clone the repository for its example files (the runtime remains installed from PyPI):
 
