@@ -259,11 +259,11 @@ class CatalogUpdateJournal:
             raise CatalogUpdateError(f"catalog bytes failed verification: {exc}") from exc
         accepted = AcceptedCatalogUpdate(catalog, trusted_hash, sequence, self.publisher, self.channel, expires)
 
-        created_home = not self.home.exists()
         # The host supplies an existing parent/volume for this protected state.
+        # An existing home may still have an *unpersisted* directory entry if
+        # another process just created it. Persist the parent on every
+        # successful admission, not only when this invocation created home.
         self.home.mkdir(parents=False, exist_ok=True)
-        if created_home:
-            _sync_directory(self.home.parent)
         with self._lock:
             # Clock freshness is checked *after* waiting for any other writer.
             now = _now(now)
@@ -296,9 +296,12 @@ class CatalogUpdateJournal:
                 "expires_at": _utc_string(expires),
                 "observed_at": _utc_string(now),
             })
-            # _write_json_atomic fsyncs the temp file before os.replace;
-            # sync the containing directory as well before acknowledging it.
+            # _write_json_atomic fsyncs the temp file before os.replace.
+            # Persist both its directory entry and the parent entry for a
+            # newly created home, even if a *different* process created home.
+            # Do both under the lock before acknowledging admission.
             _sync_directory(self.home)
+            _sync_directory(self.home.parent)
         return accepted
 
     def assert_current(self, accepted: AcceptedCatalogUpdate, *, now: datetime | None = None) -> None:
