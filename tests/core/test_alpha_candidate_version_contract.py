@@ -26,7 +26,10 @@ def test_candidate_version_matches_installed_distribution_and_readme() -> None:
     assert project["dependencies"] == []
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "badge/0.1.1a1%20alpha" in readme
+    assert f"badge/{EXPECTED_ALPHA}%20alpha" in readme
+    assert f"https://pypi.org/project/invariant-runtime/{EXPECTED_ALPHA}/" in readme
+    assert f"python -m pip install invariant-runtime=={EXPECTED_ALPHA}" in readme
+    assert "python -m pip install invariant-runtime==0.1.1a1" not in readme
     assert "This branch stages" not in readme
 
     notes = (
@@ -40,7 +43,8 @@ def test_candidate_version_matches_installed_distribution_and_readme() -> None:
 
     status = (ROOT / "docs" / "project" / "status.md").read_text(encoding="utf-8")
     assert "source tree identifies the package version as `0.1.2a1`" in status
-    assert "last published release is `0.1.1a1`" in status
+    assert f"package version as `{EXPECTED_ALPHA}` (published alpha)" in status
+    assert f"https://pypi.org/project/invariant-runtime/{EXPECTED_ALPHA}/" in status
 
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "actions/upload-artifact@v4" in workflow

@@ -22,10 +22,10 @@ Hello, Invariant!
 - Python 3.11 or newer (the package declares `requires-python >=3.11`)
 - Invariant Runtime installed in the active environment
 
-Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) in your Python environment (preferably a virtual environment):
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.2a1/) in your Python environment (preferably a virtual environment):
 
 ```bash
-python -m pip install invariant-runtime==0.1.1a1
+python -m pip install invariant-runtime==0.1.2a1
 ```
 
 The explicit version selects the published alpha, whose API may change before 1.0. No repository checkout is needed for this three-file tutorial: create `hello_plugin/` in any working directory.
