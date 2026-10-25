@@ -1,6 +1,19 @@
 name: Documentation
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "SUPPORT.md"
+      - "CAPABILITIES.md"
+      - "SECURITY.md"
+      - "docs/**"
+      - "zensical.toml"
+      - "docs_macros.py"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "README.md"
@@ -18,6 +31,11 @@ on:
 permissions:
   contents: read
 
+# Serialize main-branch Pages deployments without blocking unrelated PR checks.
+concurrency:
+  group: docs-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: docs / strict site build / py3.11
@@ -34,3 +52,25 @@ jobs:
         run: python -m pip install ".[docs]"
       - name: Check rendered site
         run: zensical build --clean --strict
+
+      - name: Upload GitHub Pages site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: docs / deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
