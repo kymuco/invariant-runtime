@@ -13,6 +13,8 @@
 
 All new delivery helpers are **internal integrations** under `invariant.load`, **not** additions to public `invariant.api` or `invariant.spec`. Direct `ZipSource` discovery and `RemoteSource` loading remain incomplete. SHA equality does not establish publisher identity, code safety, or installation permission; this is not an untrusted-plugin sandbox, signature PKI, automatic marketplace, or hot-swap system. POSIX checkpoint durability depends on filesystem guarantees; portable Windows power-loss durability is not promised.
 
+The public built-in process capability remains `invariant:capability.process@0.2.0`; release metadata changes do **not** imply capability version changes.
+
 Public installation examples continue to pin **published** `0.1.1a1` until `0.1.2a1` is independently confirmed on PyPI. Older wheels do not contain the newly added internal Store/Catalog modules. No downstream HDE/Runplane/Character_OS repin or compatibility promise is made here.
 
 ## Candidate acceptance gates
