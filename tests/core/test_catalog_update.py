@@ -337,10 +337,53 @@ def test_checkpoint_rename_synced_before_admit_reports_success(tmp_path, monkeyp
     monkeypatch.setattr(catalog_update, "_sync_directory", observe_sync)
     accept(j, metadata(1, c), c, bootstrap=True)
     assert events == [
-        ("sync", j.home.parent),
         ("write", j.checkpoint),
         ("sync", j.home),
+        ("sync", j.home.parent),
     ]
     events.clear()
     accept(j, metadata(1, c), c, now=NOW + timedelta(minutes=1))
-    assert events == [("write", j.checkpoint), ("sync", j.home)]
+    assert events == [
+        ("write", j.checkpoint),
+        ("sync", j.home),
+        ("sync", j.home.parent),
+    ]
+
+
+def test_preexisting_but_not_yet_durable_home_still_requires_parent_sync(tmp_path, monkeypatch):
+    """A second journal must not trust a directory merely because it exists.
+
+    Another process may have created home and crashed *before* persisting its
+    parent entry. This journal must sync the parent itself to acknowledge an
+    admission, even though it did not create that directory.
+    """
+    import os
+    import invariant.load.catalog_update as catalog_update
+
+    if os.name == "nt":
+        pytest.skip("directory fsync is POSIX-only; Windows limitation documented")
+    j = journal(tmp_path)
+    j.home.mkdir(parents=True)  # Simulate another process's unsynced mkdir.
+    seen = []
+    original_sync = catalog_update._sync_directory
+
+    def observe_sync(path):
+        seen.append(path)
+        original_sync(path)
+
+    monkeypatch.setattr(catalog_update, "_sync_directory", observe_sync)
+    catalog = payload()
+    accepted = accept(j, metadata(1, catalog), catalog, bootstrap=True)
+    assert seen == [j.home, j.home.parent]
+    j.assert_current(accepted, now=NOW)
+
+    # If the required parent sync fails, admission cannot report success even
+    # when home and an otherwise intact checkpoint file already exist.
+    def fail_parent(path):
+        if path == j.home.parent:
+            raise OSError("simulated parent directory fsync failure")
+        original_sync(path)
+
+    monkeypatch.setattr(catalog_update, "_sync_directory", fail_parent)
+    with pytest.raises(OSError, match="simulated parent"):
+        accept(j, metadata(1, catalog), catalog, now=NOW + timedelta(minutes=1))
