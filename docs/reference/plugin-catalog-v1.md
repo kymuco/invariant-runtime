@@ -74,6 +74,8 @@ Neither `plan()` nor catalog parsing authorizes work.
 
 The catalog is an immutable snapshot. For an update, verify new bytes using
 a separately trusted new expected digest and obtain a **new plan approval**.
+For monotonic updates, independent metadata origin pins and expiration checks,
+see [Trusted catalog updates](plugin-catalog-updates.md).
 The Store's own catalog (installed-object index) is a different concept:
 that local index is not this distribution catalog.
 
