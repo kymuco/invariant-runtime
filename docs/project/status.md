@@ -18,9 +18,9 @@ Read [Public API](../reference/public-api.md), [Manifest v1](../reference/manife
 
 ## Compatibility status
 
-**This source tree identifies the package version as `0.1.2a1` (unpublished alpha candidate).** The last published release is `0.1.1a1`, which predates the internal Store/ZIP acquisition, HTTPS installation, planner, and catalog update additions. A source version, pull request, or CI artifact is not itself a GitHub tag/Release or a PyPI publication. Check the repository Releases page and package index separately for actual distribution availability.
+**This source tree identifies the package version as `0.1.2a1` (published alpha).** The version is available on [PyPI](https://pypi.org/project/invariant-runtime/0.1.2a1/) and as a [GitHub prerelease](https://github.com/kymuco/invariant-runtime/releases/tag/v0.1.2a1). The previous alpha, `0.1.1a1`, predates the internal Store/ZIP acquisition, HTTPS installation, planner, and catalog update additions. Check the actual installed distribution version and release artifacts when reporting compatibility.
 
-These additions are bounded internal host integrations, **not** stable public `invariant.api` or `invariant.spec` surfaces. See [0.1.2a1 candidate verification](../alpha-candidate-0.1.2a1.md).
+These additions are bounded internal host integrations, **not** stable public `invariant.api` or `invariant.spec` surfaces. See the historical [0.1.2a1 candidate verification record](../alpha-candidate-0.1.2a1.md).
 
 Alpha means public API compatibility changes remain possible before 1.0, although deliberate changes must be documented and tested. Prefer the installed package's actual `__version__` when reporting problems.
 

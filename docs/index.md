@@ -4,10 +4,10 @@
 
 ## Start here
 
-Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) using Python 3.11+:
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.2a1/) using Python 3.11+:
 
 ```bash
-python -m pip install invariant-runtime==0.1.1a1
+python -m pip install invariant-runtime==0.1.2a1
 ```
 
 The explicit version pins the alpha. No checkout is needed to use Invariant in your own application.

@@ -6,23 +6,23 @@ Build extensible Python applications from independent, composable plugins. Invar
 
 [![CI](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml/badge.svg)](https://github.com/kymuco/invariant-runtime/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/Python%203.11%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![0.1 alpha](https://img.shields.io/badge/0.1.1a1%20alpha-64748B?style=flat)](docs/project/status.md)
+[![0.1 alpha](https://img.shields.io/badge/0.1.2a1%20alpha-64748B?style=flat)](docs/project/status.md)
 [![Apache-2.0](https://img.shields.io/badge/Apache--2.0-64748B?style=flat)](LICENSE)
 
 No mandatory third-party runtime dependencies. Plugins may use their own packages.
 
 ## Quick start
 
-Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.1a1/) with Python 3.11+:
+Install the published alpha from [PyPI](https://pypi.org/project/invariant-runtime/0.1.2a1/) with Python 3.11+:
 
 ```bash
-python -m pip install invariant-runtime==0.1.1a1
+python -m pip install invariant-runtime==0.1.2a1
 python -c "import invariant; print(invariant.__version__)"
 ```
 
-The version pin selects the **last published** alpha. This source tree stages a later `0.1.2a1` candidate, **not available on PyPI until separately released**. Its ZIP installation, Plugin Store, HTTPS acquisition, planner, and catalog update helpers are internal `invariant.load` integrations rather than supported public `invariant.api` exports. You do **not** need to clone this repository to use the published alpha.
+The version pin selects the **published** `0.1.2a1` alpha. Its local ZIP installation, Plugin Store, HTTPS acquisition, installation planner, and catalog update helpers are internal `invariant.load` integrations rather than supported public `invariant.api` exports. You do **not** need to clone this repository to use the published package.
 
-[Release candidate scope and verification](docs/alpha-candidate-0.1.2a1.md).
+[GitHub release v0.1.2a1](https://github.com/kymuco/invariant-runtime/releases/tag/v0.1.2a1) · [Historical release-candidate verification record](docs/alpha-candidate-0.1.2a1.md).
 
 To run the included example application, clone the repository for its example files (the runtime remains installed from PyPI):
 
