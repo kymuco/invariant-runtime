@@ -1,4 +1,4 @@
-"""Source-independent wheel smoke for the staged 0.1.1a1 alpha candidate.
+"""Source-independent wheel smoke for the staged 0.1.2a1 alpha candidate.
 
 Run with the isolated wheel venv's Python -I from OUTSIDE the checkout.
 This script is not packaged in the wheel or imported by runtime users.
@@ -9,15 +9,22 @@ import importlib.metadata
 import json
 import re
 import sys
+import zipfile
 from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import invariant
 from invariant.api import PluginService
+from invariant.load.acquisition import install_verified_https_plugin
+from invariant.load.catalog_update import CatalogUpdateJournal
+from invariant.load.installation_plan import PluginInstallationPlanner
+from invariant.load.plugin_catalog import VerifiedPluginCatalog
+from invariant.load.plugin_store import LocalPluginStore
+from invariant.load.sources.installed import InstalledSource
 from invariant.spec import PROCESS_CAPABILITY
 
-EXPECTED_VERSION = "0.1.1a1"
+EXPECTED_VERSION = "0.1.2a1"
 
 
 def main() -> None:
@@ -93,6 +100,24 @@ def main() -> None:
         finally:
             service.close()
 
+        # Installed-wheel proof of the internal ZIP → Store → InstalledSource path.
+        # The archive is deleted after installation; there is no network access.
+        archive = root / "alpha-plugin.zip"
+        with zipfile.ZipFile(archive, "w") as zipped:
+            zipped.write(plugin / "manifest.json", arcname="manifest.json")
+            zipped.write(plugin / "plugin.py", arcname="plugin.py")
+        store = LocalPluginStore(root / "installed-store")
+        store.install_zip(archive)
+        archive.unlink()
+        with store.open_service() as installed_service:
+            assert len(installed_service.loader.sources) == 1
+            assert isinstance(installed_service.loader.sources[0], InstalledSource)
+            assert installed_service.get("release:alpha_smoke@1.0.0").greet("store") == (
+                "Hello, store!"
+            )
+        assert len(list(store.objects.iterdir())) == 1
+        assert not list(store.leases.iterdir())
+
     print(
         "INVARIANT_ALPHA_WHEEL_PROOF_JSON="
         + json.dumps(
@@ -103,6 +128,11 @@ def main() -> None:
                 "dependencies": 0,
                 "py_typed": True,
                 "manifest_activation": "PASS",
+                "installed_zip_activation": "PASS",
+                "internal_delivery_modules": all((
+                    LocalPluginStore, InstalledSource, install_verified_https_plugin,
+                    PluginInstallationPlanner, VerifiedPluginCatalog, CatalogUpdateJournal,
+                )),
                 "status": "PASS",
             },
             sort_keys=True,

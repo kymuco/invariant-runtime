@@ -13,7 +13,7 @@ import invariant
 
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_ALPHA = "0.1.1a1"
+EXPECTED_ALPHA = "0.1.2a1"
 
 
 def test_candidate_version_matches_installed_distribution_and_readme() -> None:
@@ -30,15 +30,17 @@ def test_candidate_version_matches_installed_distribution_and_readme() -> None:
     assert "This branch stages" not in readme
 
     notes = (
-        ROOT / "docs" / "alpha-candidate-0.1.1a1.md"
+        ROOT / "docs" / "alpha-candidate-0.1.2a1.md"
     ).read_text(encoding="utf-8")
     assert "Release preparation record" in notes
     assert "SHA256SUMS" in notes
-    assert "0.1.1a1" in notes
+    assert "0.1.2a1" in notes
+    assert "invariant.load.plugin_store" in notes
     assert "invariant:capability.process@0.2.0" in notes
 
     status = (ROOT / "docs" / "project" / "status.md").read_text(encoding="utf-8")
-    assert "source tree identifies the package version as `0.1.1a1`" in status
+    assert "source tree identifies the package version as `0.1.2a1`" in status
+    assert "last published release is `0.1.1a1`" in status
 
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "actions/upload-artifact@v4" in workflow
@@ -49,6 +51,6 @@ def test_isolated_wheel_smoke_script_remains_valid_python() -> None:
     script = ROOT / "tools" / "verify_installed_alpha_candidate.py"
     source = script.read_text(encoding="utf-8")
     compile(source, str(script), "exec")
-    assert 'EXPECTED_VERSION = "0.1.1a1"' in source
+    assert 'EXPECTED_VERSION = "0.1.2a1"' in source
     assert "INVARIANT_ALPHA_INSTALLED_WHEEL_PASS" in source
     assert "from invariant.api import PluginService" in source

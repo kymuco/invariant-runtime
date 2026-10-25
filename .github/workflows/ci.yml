@@ -84,7 +84,7 @@ jobs:
       - name: Upload verified alpha distributions
         uses: actions/upload-artifact@v4
         with:
-          name: invariant-runtime-0.1.1a1-${{ github.event.pull_request.head.sha || github.sha }}
+          name: invariant-runtime-0.1.2a1-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             dist/*.whl
             dist/*.tar.gz
